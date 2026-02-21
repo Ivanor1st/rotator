@@ -59,6 +59,8 @@ if (-not (Test-ProxyReady -Port $port)) {
 # -- Environment variables for Claude Code --
 $env:ANTHROPIC_BASE_URL = "http://localhost:$port"
 $env:ANTHROPIC_AUTH_TOKEN = $Token
+# Disable experimental beta headers (proxy routes to non-Anthropic providers)
+$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = "1"
 
 # Git Bash is REQUIRED for Claude Code on Windows
 $gitBashPath = "C:\Program Files\Git\bin\bash.exe"
@@ -353,6 +355,7 @@ if ($Model) {
     $launchParts = @()
     $launchParts += "`$env:ANTHROPIC_BASE_URL = 'http://localhost:$port'"
     $launchParts += "`$env:ANTHROPIC_AUTH_TOKEN = '$Token'"
+    $launchParts += "`$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1'"
     if ($env:CLAUDE_CODE_GIT_BASH_PATH) {
         $launchParts += "`$env:CLAUDE_CODE_GIT_BASH_PATH = '$($env:CLAUDE_CODE_GIT_BASH_PATH)'"
     }

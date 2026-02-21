@@ -180,10 +180,13 @@ Onglet **Claude Code** → Lancement rapide → cliquer **▶ Créer token + lan
 ```powershell
 $env:ANTHROPIC_BASE_URL = "http://localhost:47822"
 $env:ANTHROPIC_AUTH_TOKEN = "rotator"
+$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = "1"
 claude --model coding
 ```
 
 Le proxy expose `/v1/messages` (API Anthropic) et `/v1/chat/completions` (API OpenAI). Claude Code utilise l'API Anthropic nativement.
+
+> `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` est recommandé par Anthropic quand le proxy route vers des providers non-Anthropic (Google, NVIDIA, OpenRouter, Ollama).
 
 > **Alias supportés** : `claude-sonnet-4-6`, `gpt-5-mini`, `github/gpt5mini` → profil `coding`.
 

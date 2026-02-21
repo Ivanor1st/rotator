@@ -283,7 +283,7 @@
     const token = document.getElementById('ccExistingToken').value;
     const port = document.getElementById('ccPort').innerText;
     if (!token) { alert('Sélectionnez d\'abord un token.'); return; }
-    const text = `$env:ANTHROPIC_BASE_URL="http://localhost:${port}"\n$env:ANTHROPIC_AUTH_TOKEN="${token}"\nclaude --model coding`;
+    const text = `$env:ANTHROPIC_BASE_URL="http://localhost:${port}"\n$env:ANTHROPIC_AUTH_TOKEN="${token}"\n$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS="1"\nclaude --model coding`;
     navigator.clipboard.writeText(text).then(() => alert('✅ Copié !'));
   }
 

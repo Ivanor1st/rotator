@@ -229,7 +229,7 @@ function New-ClaudeManualCommand {
     if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
         $gitBashPart = "`$env:CLAUDE_CODE_GIT_BASH_PATH='C:\Program Files\Git\bin\bash.exe'; "
     }
-    return "cd `"$WorkDir`"; `$env:ANTHROPIC_BASE_URL='http://localhost:$port'; `$env:ANTHROPIC_AUTH_TOKEN='$Token'; ${gitBashPart}claude --model coding"
+    return "cd `"$WorkDir`"; `$env:ANTHROPIC_BASE_URL='http://localhost:$port'; `$env:ANTHROPIC_AUTH_TOKEN='$Token'; `$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS='1'; ${gitBashPart}claude --model coding"
 }
 
 function Get-Port {
@@ -421,7 +421,7 @@ if ($args.Count -gt 0 -and $args[0] -eq "go") {
                 $safeToken = ConvertTo-EscapedSingleQuote $token
                 $gitBash = if (Test-Path 'C:\Program Files\Git\bin\bash.exe') { 'C:\Program Files\Git\bin\bash.exe' } elseif (Test-Path 'C:\Program Files (x86)\Git\bin\bash.exe') { 'C:\Program Files (x86)\Git\bin\bash.exe' } else { '' }
                 $gitBashEnv = if ($gitBash) { "`$env:CLAUDE_CODE_GIT_BASH_PATH='$gitBash'; " } else { "" }
-                $cmd = "Set-Location -LiteralPath '$safeDir'; `$env:ANTHROPIC_BASE_URL='http://localhost:$port'; `$env:ANTHROPIC_AUTH_TOKEN='$safeToken'; $gitBashEnv Write-Host 'ANTHROPIC_BASE_URL=' `$env:ANTHROPIC_BASE_URL -ForegroundColor Cyan; Write-Host 'Projet=' '$projectName' -ForegroundColor Cyan; Write-Host 'Modele par defaut=' 'coding' -ForegroundColor Cyan; claude --model coding"
+                $cmd = "Set-Location -LiteralPath '$safeDir'; `$env:ANTHROPIC_BASE_URL='http://localhost:$port'; `$env:ANTHROPIC_AUTH_TOKEN='$safeToken'; `$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS='1'; $gitBashEnv Write-Host 'ANTHROPIC_BASE_URL=' `$env:ANTHROPIC_BASE_URL -ForegroundColor Cyan; Write-Host 'Projet=' '$projectName' -ForegroundColor Cyan; Write-Host 'Modele par defaut=' 'coding' -ForegroundColor Cyan; claude --model coding"
                 Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", $cmd | Out-Null
                 Write-Host "Claude lance dans un nouveau terminal (dossier: $targetDir)." -ForegroundColor Green
             }

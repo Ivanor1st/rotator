@@ -2100,11 +2100,13 @@ async def create_claude_onboarding_project(payload: dict[str, Any] | None = None
         "env": {
             "ANTHROPIC_BASE_URL": f"http://localhost:{port}",
             "ANTHROPIC_AUTH_TOKEN": project["token"],
+            "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
         },
         "rotator_path": str(BASE_DIR.resolve()),
         "usage": [
             f"$env:ANTHROPIC_BASE_URL=http://localhost:{port}",
             f"$env:ANTHROPIC_AUTH_TOKEN={project['token']}",
+            "$env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1",
             "claude --model coding",
             "# optionnel: /model puis choisir un id de /v1/models",
         ],
