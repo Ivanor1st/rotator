@@ -108,7 +108,9 @@ class AppState:
             "auth_block_hits_total": 0,
             "auth_success_resets_total": 0,
         }
-        self.client = httpx.AsyncClient(timeout=90)
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=15, read=300, write=30, pool=30),
+        )
 
 
 state = AppState()
@@ -1426,7 +1428,11 @@ def _openai_response_to_anthropic(body: dict[str, Any], requested_model: str) ->
 
 
 async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id: str) -> Any:
-    """Convert OpenAI SSE stream to Anthropic Messages SSE stream."""
+    """Convert OpenAI SSE stream to Anthropic Messages SSE stream.
+
+    Properly buffers partial SSE lines across raw byte boundaries to avoid
+    losing data when aiter_raw() splits a JSON payload mid-line.
+    """
     yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': msg_id, 'type': 'message', 'role': 'assistant', 'model': requested_model, 'content': [], 'stop_reason': None, 'stop_sequence': None, 'usage': {'input_tokens': 0, 'output_tokens': 0, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 0}}})}\n\n"
     yield "event: ping\ndata: {\"type\": \"ping\"}\n\n"
 
@@ -1438,76 +1444,98 @@ async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id:
     started_tool_indices: set[int] = set()  # which tc indices have had content_block_start
     tc_block_map: dict[int, int] = {}       # openai tc_index → anthropic block_index
     finish_reason_captured: str | None = None
+    line_buf = ""  # SSE line buffer for partial data across raw chunks
 
-    async for raw_chunk in response.aiter_raw():
-        text = raw_chunk.decode("utf-8", errors="ignore") if isinstance(raw_chunk, bytes) else raw_chunk
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line.startswith("data: "):
-                continue
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                continue
-            try:
-                chunk = json.loads(data_str)
-            except (json.JSONDecodeError, ValueError):
-                continue
+    try:
+        async for raw_chunk in response.aiter_raw():
+            text = raw_chunk.decode("utf-8", errors="ignore") if isinstance(raw_chunk, bytes) else raw_chunk
+            line_buf += text
 
-            choice = (chunk.get("choices") or [{}])[0]
-            delta = choice.get("delta", {})
-            fr = choice.get("finish_reason")
-            if fr:
-                finish_reason_captured = fr
+            # Process only complete lines (terminated by \n)
+            while "\n" in line_buf:
+                line, line_buf = line_buf.split("\n", 1)
+                line = line.strip()
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(data_str)
+                except (json.JSONDecodeError, ValueError):
+                    continue
 
-            reasoning = delta.get("reasoning") or delta.get("reasoning_content") or ""
-            content = delta.get("content") or ""
-            tool_calls_delta = delta.get("tool_calls") or []
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta", {})
+                fr = choice.get("finish_reason")
+                if fr:
+                    finish_reason_captured = fr
 
-            # Handle thinking/reasoning blocks
-            if reasoning:
-                if current_block_type != "thinking":
-                    if current_block_type is not None:
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
-                        block_index += 1
-                    current_block_type = "thinking"
-                    yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'thinking', 'thinking': ''}})}\n\n"
-                full_thinking += reasoning
-                yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': block_index, 'delta': {'type': 'thinking_delta', 'thinking': reasoning}})}\n\n"
+                reasoning = delta.get("reasoning") or delta.get("reasoning_content") or ""
+                content = delta.get("content") or ""
+                tool_calls_delta = delta.get("tool_calls") or []
 
-            # Handle text content
-            if content:
-                if current_block_type != "text":
-                    if current_block_type is not None:
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
-                        block_index += 1
-                    current_block_type = "text"
-                    yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
-                full_text += content
-                yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': block_index, 'delta': {'type': 'text_delta', 'text': content}})}\n\n"
+                # Handle thinking/reasoning blocks
+                if reasoning:
+                    if current_block_type != "thinking":
+                        if current_block_type is not None:
+                            yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
+                            block_index += 1
+                        current_block_type = "thinking"
+                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'thinking', 'thinking': ''}})}\n\n"
+                    full_thinking += reasoning
+                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': block_index, 'delta': {'type': 'thinking_delta', 'thinking': reasoning}})}\n\n"
 
-            # Handle tool calls (OpenAI delta.tool_calls → Anthropic tool_use blocks)
-            for tc in tool_calls_delta:
-                tc_idx = tc.get("index", 0)
-                tc_id = tc.get("id")
-                tc_func = tc.get("function", {})
-                tc_name = tc_func.get("name")
-                tc_args = tc_func.get("arguments", "")
+                # Handle text content
+                if content:
+                    if current_block_type != "text":
+                        if current_block_type is not None:
+                            yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
+                            block_index += 1
+                        current_block_type = "text"
+                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
+                    full_text += content
+                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': block_index, 'delta': {'type': 'text_delta', 'text': content}})}\n\n"
 
-                if tc_idx not in started_tool_indices:
-                    # New tool call — close any open block first
-                    if current_block_type is not None:
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
-                        block_index += 1
-                    started_tool_indices.add(tc_idx)
-                    tool_args_accum[tc_idx] = ""
-                    tc_block_map[tc_idx] = block_index
-                    current_block_type = "tool_use"
-                    yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'tool_use', 'id': tc_id or f'toolu_{block_index}', 'name': tc_name or '', 'input': {}}})}\n\n"
+                # Handle tool calls (OpenAI delta.tool_calls → Anthropic tool_use blocks)
+                for tc in tool_calls_delta:
+                    tc_idx = tc.get("index", 0)
+                    tc_id = tc.get("id")
+                    tc_func = tc.get("function", {})
+                    tc_name = tc_func.get("name")
+                    tc_args = tc_func.get("arguments", "")
 
-                if tc_args:
-                    tool_args_accum[tc_idx] += tc_args
-                    target_block = tc_block_map.get(tc_idx, block_index)
-                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': target_block, 'delta': {'type': 'input_json_delta', 'partial_json': tc_args}})}\n\n"
+                    if tc_idx not in started_tool_indices:
+                        # New tool call — close any open block first
+                        if current_block_type is not None:
+                            yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
+                            block_index += 1
+                        started_tool_indices.add(tc_idx)
+                        tool_args_accum[tc_idx] = ""
+                        tc_block_map[tc_idx] = block_index
+                        current_block_type = "tool_use"
+                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': block_index, 'content_block': {'type': 'tool_use', 'id': tc_id or f'toolu_{block_index}', 'name': tc_name or '', 'input': {}}})}\n\n"
+
+                    if tc_args:
+                        tool_args_accum[tc_idx] += tc_args
+                        target_block = tc_block_map.get(tc_idx, block_index)
+                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': target_block, 'delta': {'type': 'input_json_delta', 'partial_json': tc_args}})}\n\n"
+
+        # Process any remaining buffered data (in case stream ended without final \n)
+        if line_buf.strip().startswith("data: "):
+            data_str = line_buf.strip()[6:]
+            if data_str != "[DONE]":
+                try:
+                    chunk = json.loads(data_str)
+                    choice = (chunk.get("choices") or [{}])[0]
+                    fr = choice.get("finish_reason")
+                    if fr:
+                        finish_reason_captured = fr
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+    except Exception as e:
+        log_event("SYSTEM", f"Stream adapter error: {e}", "error", source="proxy")
 
     # Close the last open block
     if current_block_type is not None:
