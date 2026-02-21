@@ -10,6 +10,7 @@
     if (name === 'catalogue' && ollamaModelsCache.length === 0) loadOllamaModels();
     if (name === 'projects') loadProjects();
     if (name === 'claudecode') ccLoadConnect();
+    if (name === 'openclaw') ocLoadStatus();
     if (name === 'backups') loadBackups();
     if (name === 'docs') loadReadme();
     const meta = PAGE_META[name] || {};

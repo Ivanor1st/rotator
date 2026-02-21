@@ -97,6 +97,17 @@
       <span>Claude Code</span>
     </div>
 
+    <div class="nav-item top-tab" onclick="showTab('openclaw')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1C4.1 1 1 4.1 1 8s3.1 7 7 7 7-3.1 7-7S11.9 1 8 1z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M4.5 6.5C5.3 5.5 6.5 5 8 5s2.7.5 3.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M5.5 10c.5.8 1.4 1.2 2.5 1.2s2-.4 2.5-1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="6" cy="8" r="0.8" fill="currentColor"/>
+        <circle cx="10" cy="8" r="0.8" fill="currentColor"/>
+      </svg>
+      <span>OpenClaw</span>
+    </div>
+
     <div class="nav-item top-tab" onclick="showTab('backups')">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
         <path d="M8 2a6 6 0 100 12A6 6 0 008 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
@@ -715,6 +726,107 @@
             <div><span style="color:var(--accent)">~/.claude/settings.json</span> — Configuration globale</div>
             <div><span style="color:var(--accent)">&lt;projet&gt;/CLAUDE.md</span> — Mémoire projet (instructions persistantes)</div>
             <div><span style="color:var(--accent)">&lt;projet&gt;/.claude/settings.local.json</span> — Config locale projet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ OPENCLAW ══════════ -->
+    <div id="tab-openclaw" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">OpenClaw</div>
+        <div class="page-desc">Connectez vos apps de messagerie (WhatsApp, Telegram, Discord…) à l'IA via le rotator.</div>
+      </div>
+
+      <!-- Subtabs -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="subtabs">
+          <button class="subtab oc-tab active" onclick="showOCTab('connect')">🔌 Connexion</button>
+          <button class="subtab oc-tab" onclick="showOCTab('config')">⚙️ Configuration</button>
+          <button class="subtab oc-tab" onclick="showOCTab('channels')">📱 Channels</button>
+          <button class="subtab oc-tab" onclick="showOCTab('guide')">📖 Guide</button>
+        </div>
+      </div>
+
+      <!-- Connexion -->
+      <div id="oc-connect" class="oc-section">
+        <div id="ocStatusContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- Configuration -->
+      <div id="oc-config" class="oc-section" style="display:none">
+        <div id="ocConfigContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- Channels -->
+      <div id="oc-channels" class="oc-section" style="display:none">
+        <div id="ocChannelsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- Guide -->
+      <div id="oc-guide" class="oc-section" style="display:none">
+        <div class="card">
+          <div class="card-title">🦞 Qu'est-ce qu'OpenClaw ?</div>
+          <div style="font-size:12px; color:var(--text-dim); line-height:1.7; margin-top:8px">
+            <strong style="color:#fff">OpenClaw</strong> est une passerelle auto-hébergée qui connecte vos apps de messagerie
+            (WhatsApp, Telegram, Discord, iMessage, Slack, Signal…) à des agents IA.<br><br>
+            En le connectant au <strong style="color:#fff">Rotator</strong>, vous obtenez un assistant IA personnel
+            accessible depuis <strong style="color:#fff">n'importe quelle app de messagerie</strong>,
+            routé automatiquement vers le meilleur modèle disponible parmi tous vos providers.
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">🚀 Démarrage rapide</div>
+          <div style="font-family:var(--font-mono); font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; line-height:1.8; margin-top:8px">
+            <div style="color:var(--text-dim)"># 1. Installer OpenClaw</div>
+            <div>npm install -g openclaw@latest</div>
+            <div style="color:var(--text-dim); margin-top:8px"># 2. Lancer le wizard d'onboarding</div>
+            <div>openclaw onboard --install-daemon</div>
+            <div style="color:var(--text-dim); margin-top:8px"># 3. Connecter WhatsApp</div>
+            <div>openclaw channels login</div>
+            <div style="color:var(--text-dim); margin-top:8px"># 4. Démarrer le gateway</div>
+            <div>openclaw gateway --port 18789</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">🔧 Connecter au Rotator</div>
+          <div style="font-size:12px; color:var(--text-dim); line-height:1.7; margin-top:8px">
+            OpenClaw utilise des <strong style="color:#fff">custom providers</strong> pour se connecter à des backends d'inférence.
+            Le bouton <em>"Configurer Rotator comme provider"</em> dans l'onglet Connexion injecte automatiquement
+            la configuration suivante dans <code>~/.openclaw/openclaw.json</code> :
+          </div>
+          <pre style="font-family:var(--font-mono); font-size:10.5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; margin-top:8px; white-space:pre-wrap">{
+  "models": {
+    "providers": {
+      "rotator": {
+        "baseUrl": "http://localhost:47822/v1",
+        "apiKey": "rotator",
+        "api": "openai-completions",
+        "models": [
+          { "id": "coding", "name": "Rotator Coding", ... },
+          { "id": "reasoning", "name": "Rotator Reasoning", ... },
+          { "id": "chat", "name": "Rotator Chat", ... }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "rotator/coding", "fallbacks": ["rotator/reasoning"] }
+    }
+  }
+}</pre>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">🔗 Liens utiles</div>
+          <div style="font-size:12px; line-height:1.8; margin-top:8px">
+            <a href="https://docs.openclaw.ai/" target="_blank" style="color:var(--accent)">📚 Documentation officielle</a><br>
+            <a href="https://docs.openclaw.ai/gateway/configuration" target="_blank" style="color:var(--accent)">⚙️ Configuration Reference</a><br>
+            <a href="https://docs.openclaw.ai/channels/telegram" target="_blank" style="color:var(--accent)">📱 Setup des channels</a><br>
+            <a href="https://docs.ollama.com/integrations/openclaw" target="_blank" style="color:var(--accent)">🦙 OpenClaw via Ollama</a>
           </div>
         </div>
       </div>
@@ -1567,6 +1679,7 @@ Jours  : all</pre>
 <script src="/static/js/tabs.js"></script>
 <script src="/static/js/helpers.js"></script>
 <script src="/static/js/claude.js"></script>
+<script src="/static/js/openclaw.js"></script>
 <script src="/static/js/keys.js"></script>
 <script src="/static/js/pages.js"></script>
 <script src="/static/js/init.js"></script>

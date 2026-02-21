@@ -279,7 +279,49 @@ print(r.choices[0].message.content)
 
 ---
 
-## 7. Profils de routage
+## 7. OpenClaw — Messagerie → IA
+
+Connectez **WhatsApp, Telegram, Discord, iMessage, Slack, Signal…** à vos modèles IA via le rotator grâce à [OpenClaw](https://docs.openclaw.ai/) (passerelle auto-hébergée, Node 22+).
+
+### Installation rapide
+
+```bash
+npm install -g openclaw@latest   # installer le CLI
+openclaw onboard --install-daemon # wizard de config
+openclaw channels login           # connecter un channel (ex: WhatsApp)
+openclaw gateway --port 18789     # démarrer la passerelle
+```
+
+### Connecter au Rotator
+
+Depuis le **Dashboard → OpenClaw → Connexion**, cliquez *"Configurer Rotator comme provider"*.
+Cela injecte dans `~/.openclaw/openclaw.json` :
+
+```json
+{
+  "models": {
+    "providers": {
+      "rotator": {
+        "baseUrl": "http://localhost:47822/v1",
+        "apiKey": "rotator",
+        "api": "openai-completions",
+        "models": [
+          { "id": "coding",    "name": "Rotator Coding" },
+          { "id": "reasoning", "name": "Rotator Reasoning" },
+          { "id": "chat",      "name": "Rotator Chat" },
+          { "id": "long",      "name": "Rotator Long Context" }
+        ]
+      }
+    }
+  }
+}
+```
+
+Tous vos messages WhatsApp/Telegram/Discord sont alors routés vers le meilleur modèle disponible.
+
+---
+
+## 8. Profils de routage
 
 | Profil | Usage |
 |--------|-------|
@@ -295,13 +337,13 @@ Si `--model` n'est pas précisé, le profil est détecté automatiquement depuis
 
 ---
 
-## 8. Dashboard Web
+## 9. Dashboard Web
 
 ```
 http://localhost:47822/dashboard
 ```
 
-12 onglets : Vue d'ensemble · Presets · Tests & Benchmark · Statistiques · Journal · Clés API · Projets & tokens · **Claude Code** · Sauvegardes · Catalogue modèles · Configuration · Documentation.
+13 onglets : Vue d'ensemble · Presets · Tests & Benchmark · Statistiques · Journal · Clés API · Projets & tokens · **Claude Code** · **OpenClaw** · Sauvegardes · Catalogue modèles · Configuration · Documentation.
 
 Fonctionnalités clés :
 - État des 7 profils et providers actifs
@@ -313,7 +355,7 @@ Fonctionnalités clés :
 
 ---
 
-## 9. Commandes CLI
+## 10. Commandes CLI
 
 ```powershell
 .\rotator.ps1 status                     # État du proxy
@@ -329,7 +371,7 @@ Fonctionnalités clés :
 
 ---
 
-## 10. API exposée
+## 11. API exposée
 
 > Source de vérité : `GET /openapi.json` et Swagger UI à `/docs` quand le serveur tourne.
 
@@ -392,6 +434,18 @@ Fonctionnalités clés :
 | `GET` | `/api/claude-code/memory?dir=...` | Lire CLAUDE.md |
 | `POST` | `/api/claude-code/memory` | Écrire CLAUDE.md |
 
+### OpenClaw
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/openclaw/status` | État complet (Node, CLI, gateway, provider) |
+| `GET` | `/api/openclaw/config` | Lire openclaw.json |
+| `POST` | `/api/openclaw/install` | Installer OpenClaw via npm |
+| `POST` | `/api/openclaw/configure-rotator` | Injecter le provider rotator |
+| `POST` | `/api/openclaw/gateway/start` | Démarrer la passerelle |
+| `POST` | `/api/openclaw/gateway/stop` | Arrêter la passerelle |
+| `POST` | `/api/openclaw/onboard` | Lancer le wizard d'onboarding |
+
 ### Sauvegardes & maintenance
 
 | Méthode | Endpoint | Description |
@@ -425,7 +479,7 @@ Fonctionnalités clés :
 
 ---
 
-## 11. Dépannage
+## 12. Dépannage
 
 | Problème | Solution |
 |----------|----------|
@@ -440,7 +494,7 @@ Fonctionnalités clés :
 
 ---
 
-## 12. Sécurité
+## 13. Sécurité
 
 - Ne versionnez jamais un `config.yaml` contenant des clés réelles
 - Utilisez `env:VAR_NAME` dans le YAML + fichier `.env` local
@@ -450,7 +504,7 @@ Fonctionnalités clés :
 
 ---
 
-## 13. Auteur
+## 14. Auteur
 
 Créé et maintenu par **[Ivanor1st](https://github.com/Ivanor1st)**.
 

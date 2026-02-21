@@ -2260,7 +2260,255 @@ async def write_claude_memory(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "path": str(claude_md)}
 
 
-def _get_first_provider_key_value(provider: str) -> str | None:
+# ══════════════════════════════════════════════════════════════
+#  OPENCLAW INTEGRATION
+# ══════════════════════════════════════════════════════════════
+
+def _openclaw_home() -> Path:
+    """Return the OpenClaw home directory."""
+    env_home = os.environ.get("OPENCLAW_HOME")
+    if env_home:
+        return Path(env_home)
+    return Path.home() / ".openclaw"
+
+
+def _openclaw_config_path() -> Path:
+    """Return the OpenClaw config file path."""
+    env_path = os.environ.get("OPENCLAW_CONFIG_PATH")
+    if env_path:
+        return Path(env_path)
+    return _openclaw_home() / "openclaw.json"
+
+
+def _run_cmd(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
+    """Run a subprocess and return (returncode, stdout, stderr)."""
+    import subprocess
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
+    except FileNotFoundError:
+        return -1, "", "command not found"
+    except subprocess.TimeoutExpired:
+        return -2, "", "timeout"
+    except Exception as e:
+        return -3, "", str(e)
+
+
+@app.get("/api/openclaw/status")
+async def openclaw_status() -> dict[str, Any]:
+    """Full OpenClaw status: Node, OpenClaw, gateway, config, channels."""
+    result: dict[str, Any] = {}
+
+    # Node.js
+    rc, out, _ = _run_cmd(["node", "--version"])
+    result["node_installed"] = rc == 0
+    result["node_version"] = out if rc == 0 else None
+
+    # OpenClaw CLI
+    rc, out, _ = _run_cmd(["openclaw", "--version"], timeout=15)
+    result["openclaw_installed"] = rc == 0
+    result["openclaw_version"] = out if rc == 0 else None
+
+    # Gateway check (default port 18789)
+    gateway_port = 18789
+    gateway_running = False
+    try:
+        resp = await state.client.get(f"http://127.0.0.1:{gateway_port}/health", timeout=3)
+        gateway_running = resp.status_code < 500
+    except Exception:
+        pass
+    result["gateway_running"] = gateway_running
+    result["gateway_port"] = gateway_port
+    result["gateway_url"] = f"http://127.0.0.1:{gateway_port}" if gateway_running else None
+
+    # Config
+    config_path = _openclaw_config_path()
+    rotator_configured = False
+    channels: list[str] = []
+    if config_path.is_file():
+        try:
+            import json
+            raw = config_path.read_text(encoding="utf-8")
+            # Strip JS-style comments for JSON5 compat
+            import re
+            raw = re.sub(r'//.*?$', '', raw, flags=re.MULTILINE)
+            raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
+            # Remove trailing commas
+            raw = re.sub(r',\s*([\]}])', r'\1', raw)
+            cfg = json.loads(raw)
+            # Check if rotator provider exists
+            providers = cfg.get("models", {}).get("providers", {})
+            if "rotator" in providers:
+                rotator_configured = True
+            # List channels
+            ch_cfg = cfg.get("channels", {})
+            for ch_name in ("whatsapp", "telegram", "discord", "slack", "imessage", "signal", "mattermost", "googlechat"):
+                if ch_name in ch_cfg:
+                    ch_data = ch_cfg[ch_name]
+                    if isinstance(ch_data, dict) and ch_data.get("enabled", True) is not False:
+                        channels.append(ch_name)
+        except Exception:
+            pass
+    result["rotator_configured"] = rotator_configured
+    result["channels"] = channels
+    result["config_exists"] = config_path.is_file()
+    return result
+
+
+@app.get("/api/openclaw/config")
+async def openclaw_config_get() -> dict[str, Any]:
+    """Read the OpenClaw config file."""
+    config_path = _openclaw_config_path()
+    if not config_path.is_file():
+        return {"ok": False, "error": "Config file not found", "path": str(config_path)}
+    try:
+        import json, re
+        raw = config_path.read_text(encoding="utf-8")
+        raw = re.sub(r'//.*?$', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
+        raw = re.sub(r',\s*([\]}])', r'\1', raw)
+        cfg = json.loads(raw)
+        return {"ok": True, "config": cfg, "path": str(config_path)}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "path": str(config_path)}
+
+
+@app.post("/api/openclaw/install")
+async def openclaw_install() -> dict[str, Any]:
+    """Install OpenClaw via npm."""
+    rc, out, err = _run_cmd(["npm", "install", "-g", "openclaw@latest"], timeout=120)
+    if rc == 0:
+        return {"ok": True, "output": out}
+    return {"ok": False, "error": err or out}
+
+
+@app.post("/api/openclaw/configure-rotator")
+async def openclaw_configure_rotator() -> dict[str, Any]:
+    """Inject rotator as a custom provider into openclaw.json."""
+    import json
+    config_path = _openclaw_config_path()
+    port = (state.config or load_config()).get("port", 47822)
+
+    # Read existing config or create skeleton
+    cfg: dict[str, Any] = {}
+    if config_path.is_file():
+        try:
+            import re
+            raw = config_path.read_text(encoding="utf-8")
+            raw = re.sub(r'//.*?$', '', raw, flags=re.MULTILINE)
+            raw = re.sub(r'/\*.*?\*/', '', raw, flags=re.DOTALL)
+            raw = re.sub(r',\s*([\]}])', r'\1', raw)
+            cfg = json.loads(raw)
+        except Exception:
+            cfg = {}
+
+    # Ensure models.providers.rotator exists
+    if "models" not in cfg:
+        cfg["models"] = {}
+    if "providers" not in cfg["models"]:
+        cfg["models"]["providers"] = {}
+
+    cfg["models"]["providers"]["rotator"] = {
+        "baseUrl": f"http://localhost:{port}/v1",
+        "apiKey": "rotator",
+        "api": "openai-completions",
+        "models": [
+            {
+                "id": "coding",
+                "name": "Rotator Coding",
+                "reasoning": True,
+                "input": ["text"],
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 128000,
+                "maxTokens": 32000,
+            },
+            {
+                "id": "reasoning",
+                "name": "Rotator Reasoning",
+                "reasoning": True,
+                "input": ["text"],
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 128000,
+                "maxTokens": 32000,
+            },
+            {
+                "id": "chat",
+                "name": "Rotator Chat",
+                "reasoning": False,
+                "input": ["text"],
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 128000,
+                "maxTokens": 32000,
+            },
+            {
+                "id": "long",
+                "name": "Rotator Long Context",
+                "reasoning": False,
+                "input": ["text"],
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 200000,
+                "maxTokens": 32000,
+            },
+        ],
+    }
+
+    # Set rotator/coding as primary model if no agent model is set
+    if "agents" not in cfg:
+        cfg["agents"] = {}
+    defaults = cfg["agents"].setdefault("defaults", {})
+    if "model" not in defaults:
+        defaults["model"] = {
+            "primary": "rotator/coding",
+            "fallbacks": ["rotator/reasoning"],
+        }
+
+    # Write
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "path": str(config_path)}
+
+
+@app.post("/api/openclaw/gateway/start")
+async def openclaw_gateway_start() -> dict[str, Any]:
+    """Start the OpenClaw gateway in the background."""
+    import subprocess
+    try:
+        subprocess.Popen(
+            ["openclaw", "gateway", "--port", "18789"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/openclaw/gateway/stop")
+async def openclaw_gateway_stop() -> dict[str, Any]:
+    """Stop the OpenClaw gateway."""
+    rc, out, err = _run_cmd(["openclaw", "gateway", "stop"], timeout=15)
+    if rc == 0:
+        return {"ok": True}
+    return {"ok": False, "error": err or out}
+
+
+@app.post("/api/openclaw/onboard")
+async def openclaw_onboard() -> dict[str, Any]:
+    """Launch the openclaw onboard wizard in a new terminal."""
+    import subprocess
+    try:
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command",
+             "Write-Host '🦞 OpenClaw Onboard Wizard' -ForegroundColor Cyan; openclaw onboard; Read-Host 'Appuyez sur Entrée'"],
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+
     km = state.key_manager
     if km:
         records = km.keys_by_provider.get(provider, [])

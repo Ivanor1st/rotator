@@ -28,6 +28,7 @@
     keys:     { title: 'Mes clés API',           desc: 'Gérez vos clés pour chaque fournisseur' },
     projects: { title: 'Projets & tokens',       desc: 'Isolation des quotas/logs par projet' },
     claudecode:{ title: 'Claude Code',           desc: 'Sessions, modèles épinglés, mémoire et configuration Claude Code' },
+    openclaw: { title: 'OpenClaw',               desc: 'Connectez vos apps de messagerie à l\'IA via le rotator' },
     backups:  { title: 'Sauvegardes',            desc: 'Backups DB, restauration, purge et réinitialisation' },
     catalogue:{ title: 'Catalogue de modèles',   desc: 'Parcourez et installez des modèles depuis Ollama, OpenRouter et NVIDIA' },
     config:   { title: 'Configuration',          desc: 'Modifiez les paramètres du proxy' },
