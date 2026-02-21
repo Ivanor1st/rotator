@@ -17,7 +17,7 @@ import aiosqlite
 import httpx
 import yaml
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -2508,7 +2508,169 @@ async def openclaw_onboard() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def _openclaw_parse_config() -> dict[str, Any]:
+    """Read and parse openclaw.json (JSON5-tolerant)."""
+    import json as _json, re as _re
+    config_path = _openclaw_config_path()
+    if not config_path.is_file():
+        return {}
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+        raw = _re.sub(r'//.*?$', '', raw, flags=_re.MULTILINE)
+        raw = _re.sub(r'/\*.*?\*/', '', raw, flags=_re.DOTALL)
+        raw = _re.sub(r',\s*([\]}])', r'\1', raw)
+        return _json.loads(raw)
+    except Exception:
+        return {}
 
+
+@app.post("/api/openclaw/cli")
+async def openclaw_cli(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Run an openclaw CLI sub-command. Args is a list of strings."""
+    args = body.get("args", [])
+    if not isinstance(args, list) or not args:
+        raise HTTPException(400, "args must be a non-empty list")
+    timeout = min(int(body.get("timeout", 30)), 300)
+    cmd = ["openclaw"] + [str(a) for a in args]
+    rc, out, err = _run_cmd(cmd, timeout=timeout)
+    return {"ok": rc == 0, "rc": rc, "stdout": out, "stderr": err}
+
+
+@app.post("/api/openclaw/config/save")
+async def openclaw_config_save(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Write openclaw.json (full replace)."""
+    import json as _json
+    config_data = body.get("config")
+    if not isinstance(config_data, dict):
+        raise HTTPException(400, "config must be an object")
+    config_path = _openclaw_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(_json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "path": str(config_path)}
+
+
+@app.get("/api/openclaw/agents")
+async def openclaw_agents() -> dict[str, Any]:
+    """Return agents config section."""
+    cfg = _openclaw_parse_config()
+    agents = cfg.get("agents", {})
+    return {"ok": True, "defaults": agents.get("defaults", {}), "list": agents.get("list", [])}
+
+
+@app.get("/api/openclaw/skills/list")
+async def openclaw_skills_list() -> dict[str, Any]:
+    """List skills via CLI + config entries."""
+    cfg = _openclaw_parse_config()
+    entries = cfg.get("skills", {}).get("entries", {})
+    allow_bundled = cfg.get("skills", {}).get("allowBundled", None)
+    rc, out, err = _run_cmd(["openclaw", "skills", "list"], timeout=15)
+    return {"ok": True, "cli_output": out if rc == 0 else None, "cli_error": err if rc != 0 else None,
+            "config_entries": entries, "allowBundled": allow_bundled}
+
+
+@app.get("/api/openclaw/channels/details")
+async def openclaw_channels_details() -> dict[str, Any]:
+    """Return per-channel config details."""
+    cfg = _openclaw_parse_config()
+    ch_cfg = cfg.get("channels", {})
+    channels: dict[str, Any] = {}
+    for name in ("whatsapp", "telegram", "discord", "slack", "imessage", "signal",
+                 "mattermost", "googlechat", "msteams"):
+        if name in ch_cfg:
+            ch = ch_cfg[name]
+            summary: dict[str, Any] = {"present": True}
+            if isinstance(ch, dict):
+                summary["enabled"] = ch.get("enabled", True)
+                summary["dmPolicy"] = ch.get("dmPolicy", "pairing")
+                summary["groupPolicy"] = ch.get("groupPolicy", "allowlist")
+                summary["allowFrom"] = ch.get("allowFrom", [])
+                summary["groups"] = list(ch.get("groups", {}).keys()) if isinstance(ch.get("groups"), dict) else []
+                summary["hasToken"] = bool(ch.get("botToken") or ch.get("token"))
+                summary["streaming"] = ch.get("streaming", True)
+                summary["historyLimit"] = ch.get("historyLimit", None)
+                summary["customCommands"] = ch.get("customCommands", [])
+            channels[name] = summary
+    model_by_channel = cfg.get("channels", {}).get("modelByChannel", {})
+    return {"ok": True, "channels": channels, "modelByChannel": model_by_channel,
+            "defaults": {k: ch_cfg[k] for k in ("defaults",) if k in ch_cfg}}
+
+
+@app.get("/api/openclaw/sessions/config")
+async def openclaw_sessions_config() -> dict[str, Any]:
+    """Return session config."""
+    cfg = _openclaw_parse_config()
+    return {"ok": True, "session": cfg.get("session", {}), "messages": cfg.get("messages", {})}
+
+
+@app.get("/api/openclaw/tools/config")
+async def openclaw_tools_config() -> dict[str, Any]:
+    """Return tools config."""
+    cfg = _openclaw_parse_config()
+    return {"ok": True, "tools": cfg.get("tools", {}), "browser": cfg.get("browser", {})}
+
+
+@app.get("/api/openclaw/cron/list")
+async def openclaw_cron_list() -> dict[str, Any]:
+    """List cron jobs from the store file."""
+    jobs_path = _openclaw_home() / "cron" / "jobs.json"
+    if jobs_path.is_file():
+        try:
+            import json as _json
+            data = _json.loads(jobs_path.read_text(encoding="utf-8"))
+            jobs = data if isinstance(data, list) else data.get("jobs", []) if isinstance(data, dict) else []
+            return {"ok": True, "jobs": jobs}
+        except Exception as e:
+            return {"ok": False, "jobs": [], "error": str(e)}
+    # Fallback: try CLI
+    rc, out, err = _run_cmd(["openclaw", "cron", "list", "--json"], timeout=15)
+    if rc == 0:
+        try:
+            import json as _json
+            return {"ok": True, "jobs": _json.loads(out)}
+        except Exception:
+            return {"ok": True, "jobs": [], "raw": out}
+    return {"ok": False, "jobs": [], "error": err}
+
+
+@app.post("/api/openclaw/doctor")
+async def openclaw_doctor() -> dict[str, Any]:
+    """Run openclaw doctor --non-interactive."""
+    rc, out, err = _run_cmd(["openclaw", "doctor", "--non-interactive"], timeout=120)
+    return {"ok": rc == 0, "rc": rc, "output": out, "errors": err}
+
+
+@app.post("/api/openclaw/channels/login")
+async def openclaw_channel_login(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Open a terminal for channel login (QR code etc.)."""
+    import subprocess
+    channel = str(body.get("channel", "whatsapp"))
+    if channel not in ("whatsapp", "telegram", "discord", "slack", "signal", "imessage"):
+        raise HTTPException(400, f"Unknown channel: {channel}")
+    try:
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command",
+             f"Write-Host '🦞 OpenClaw — Login {channel}' -ForegroundColor Cyan; openclaw channels login --channel {channel}; Read-Host '\\nAppuyez sur Entrée'"],
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/openclaw/gateway/restart")
+async def openclaw_gateway_restart() -> dict[str, Any]:
+    """Restart the OpenClaw gateway."""
+    rc, out, err = _run_cmd(["openclaw", "gateway", "restart"], timeout=30)
+    if rc == 0:
+        return {"ok": True}
+    return {"ok": False, "error": err or out}
+
+
+# ══════════════════════════════════════════════════════════════
+
+
+def _get_first_provider_key_value(provider: str) -> str | None:
+    """Return the first key value for a given provider."""
     km = state.key_manager
     if km:
         records = km.keys_by_provider.get(provider, [])

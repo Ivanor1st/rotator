@@ -735,44 +735,85 @@
     <div id="tab-openclaw" class="section top-section">
       <div class="page-header">
         <div class="page-title">OpenClaw</div>
-        <div class="page-desc">Connectez vos apps de messagerie (WhatsApp, Telegram, Discord…) à l'IA via le rotator.</div>
+        <div class="page-desc">Tableau de bord complet — gateway, agents, skills, channels, cron, sessions, tools, config & diagnostics.</div>
       </div>
 
       <!-- Subtabs -->
       <div class="card" style="margin-bottom:16px">
-        <div class="subtabs">
+        <div class="subtabs" style="flex-wrap:wrap">
           <button class="subtab oc-tab active" onclick="showOCTab('connect')">🔌 Connexion</button>
-          <button class="subtab oc-tab" onclick="showOCTab('config')">⚙️ Configuration</button>
+          <button class="subtab oc-tab" onclick="showOCTab('agents')">🤖 Agents</button>
+          <button class="subtab oc-tab" onclick="showOCTab('skills')">🧩 Skills</button>
           <button class="subtab oc-tab" onclick="showOCTab('channels')">📱 Channels</button>
+          <button class="subtab oc-tab" onclick="showOCTab('cron')">⏰ Cron</button>
+          <button class="subtab oc-tab" onclick="showOCTab('sessions')">💬 Sessions</button>
+          <button class="subtab oc-tab" onclick="showOCTab('tools')">🔧 Tools</button>
+          <button class="subtab oc-tab" onclick="showOCTab('config')">⚙️ Config</button>
+          <button class="subtab oc-tab" onclick="showOCTab('doctor')">🩺 Doctor</button>
           <button class="subtab oc-tab" onclick="showOCTab('guide')">📖 Guide</button>
         </div>
       </div>
 
-      <!-- Connexion -->
+      <!-- 1. Connexion -->
       <div id="oc-connect" class="oc-section">
-        <div id="ocStatusContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+        <div id="ocConnectContent"><div style="color:var(--text-dim)">Chargement…</div></div>
       </div>
 
-      <!-- Configuration -->
-      <div id="oc-config" class="oc-section" style="display:none">
-        <div id="ocConfigContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      <!-- 2. Agents -->
+      <div id="oc-agents" class="oc-section" style="display:none">
+        <div id="ocAgentsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
       </div>
 
-      <!-- Channels -->
+      <!-- 3. Skills -->
+      <div id="oc-skills" class="oc-section" style="display:none">
+        <div id="ocSkillsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 4. Channels -->
       <div id="oc-channels" class="oc-section" style="display:none">
         <div id="ocChannelsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
       </div>
 
-      <!-- Guide -->
+      <!-- 5. Cron -->
+      <div id="oc-cron" class="oc-section" style="display:none">
+        <div id="ocCronContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 6. Sessions -->
+      <div id="oc-sessions" class="oc-section" style="display:none">
+        <div id="ocSessionsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 7. Tools -->
+      <div id="oc-tools" class="oc-section" style="display:none">
+        <div id="ocToolsContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 8. Config -->
+      <div id="oc-config" class="oc-section" style="display:none">
+        <div id="ocConfigContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 9. Doctor -->
+      <div id="oc-doctor" class="oc-section" style="display:none">
+        <div id="ocDoctorContent"><div style="color:var(--text-dim)">Chargement…</div></div>
+      </div>
+
+      <!-- 10. Guide -->
       <div id="oc-guide" class="oc-section" style="display:none">
         <div class="card">
           <div class="card-title">🦞 Qu'est-ce qu'OpenClaw ?</div>
           <div style="font-size:12px; color:var(--text-dim); line-height:1.7; margin-top:8px">
             <strong style="color:#fff">OpenClaw</strong> est une passerelle auto-hébergée qui connecte vos apps de messagerie
-            (WhatsApp, Telegram, Discord, iMessage, Slack, Signal…) à des agents IA.<br><br>
+            (WhatsApp, Telegram, Discord, iMessage, Slack, Signal, Mattermost, Google Chat…) à des agents IA.<br><br>
             En le connectant au <strong style="color:#fff">Rotator</strong>, vous obtenez un assistant IA personnel
             accessible depuis <strong style="color:#fff">n'importe quelle app de messagerie</strong>,
-            routé automatiquement vers le meilleur modèle disponible parmi tous vos providers.
+            routé automatiquement vers le meilleur modèle disponible parmi tous vos providers.<br><br>
+            Le dashboard ci-dessus vous donne un contrôle total sur votre installation OpenClaw :
+            <strong style="color:#fff">agents</strong>, <strong style="color:#fff">skills</strong>,
+            <strong style="color:#fff">channels</strong>, <strong style="color:#fff">cron jobs</strong>,
+            <strong style="color:#fff">sessions</strong>, <strong style="color:#fff">tools</strong>,
+            et <strong style="color:#fff">diagnostics</strong>.
           </div>
         </div>
 
@@ -787,46 +828,47 @@
             <div>openclaw channels login</div>
             <div style="color:var(--text-dim); margin-top:8px"># 4. Démarrer le gateway</div>
             <div>openclaw gateway --port 18789</div>
+            <div style="color:var(--text-dim); margin-top:8px"># 5. Lancer un diagnostic</div>
+            <div>openclaw doctor</div>
           </div>
         </div>
 
         <div class="card" style="margin-top:12px">
           <div class="card-title">🔧 Connecter au Rotator</div>
           <div style="font-size:12px; color:var(--text-dim); line-height:1.7; margin-top:8px">
-            OpenClaw utilise des <strong style="color:#fff">custom providers</strong> pour se connecter à des backends d'inférence.
-            Le bouton <em>"Configurer Rotator comme provider"</em> dans l'onglet Connexion injecte automatiquement
-            la configuration suivante dans <code>~/.openclaw/openclaw.json</code> :
+            Utilisez le bouton <em>"Configurer Rotator comme provider"</em> dans l'onglet <strong style="color:#fff">Connexion</strong>
+            (ou <strong style="color:#fff">Config</strong>) pour injecter automatiquement le provider rotator dans votre <code>openclaw.json</code>.
+            Cela crée 4 modèles : <code>coding</code>, <code>reasoning</code>, <code>chat</code>, <code>long</code>.
           </div>
-          <pre style="font-family:var(--font-mono); font-size:10.5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; margin-top:8px; white-space:pre-wrap">{
-  "models": {
-    "providers": {
-      "rotator": {
-        "baseUrl": "http://localhost:47822/v1",
-        "apiKey": "rotator",
-        "api": "openai-completions",
-        "models": [
-          { "id": "coding", "name": "Rotator Coding", ... },
-          { "id": "reasoning", "name": "Rotator Reasoning", ... },
-          { "id": "chat", "name": "Rotator Chat", ... }
-        ]
-      }
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": { "primary": "rotator/coding", "fallbacks": ["rotator/reasoning"] }
-    }
-  }
-}</pre>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="card-title">📖 Fonctionnalités clés</div>
+          <div style="font-size:12px; line-height:1.8; margin-top:8px; color:var(--text-dim)">
+            <div><strong style="color:#fff">🤖 Multi-agents</strong> — Agents avec identité, modèles, workspace & routing</div>
+            <div><strong style="color:#fff">🧩 Skills</strong> — Extensions AgentSkills (ClawHub registry)</div>
+            <div><strong style="color:#fff">📱 8+ channels</strong> — WhatsApp, Telegram, Discord, Slack, Signal, iMessage…</div>
+            <div><strong style="color:#fff">⏰ Cron</strong> — Jobs programmés (cron, every, at) avec livraison multi-channel</div>
+            <div><strong style="color:#fff">💬 Sessions</strong> — Scopes, reset modes, identity links</div>
+            <div><strong style="color:#fff">🔧 Tools</strong> — Profiles, allow/deny, exec, browser, web search</div>
+            <div><strong style="color:#fff">🩺 Doctor</strong> — 19 checks diagnostiques avec repair</div>
+            <div><strong style="color:#fff">💓 Heartbeat</strong> — Messages périodiques, keep-alive</div>
+            <div><strong style="color:#fff">📦 Compaction</strong> — Gestion mémoire intelligente</div>
+            <div><strong style="color:#fff">🔊 TTS</strong> — Text-to-Speech sur les messages</div>
+          </div>
         </div>
 
         <div class="card" style="margin-top:12px">
           <div class="card-title">🔗 Liens utiles</div>
           <div style="font-size:12px; line-height:1.8; margin-top:8px">
             <a href="https://docs.openclaw.ai/" target="_blank" style="color:var(--accent)">📚 Documentation officielle</a><br>
-            <a href="https://docs.openclaw.ai/gateway/configuration" target="_blank" style="color:var(--accent)">⚙️ Configuration Reference</a><br>
-            <a href="https://docs.openclaw.ai/channels/telegram" target="_blank" style="color:var(--accent)">📱 Setup des channels</a><br>
-            <a href="https://docs.ollama.com/integrations/openclaw" target="_blank" style="color:var(--accent)">🦙 OpenClaw via Ollama</a>
+            <a href="https://docs.openclaw.ai/gateway/configuration-reference" target="_blank" style="color:var(--accent)">⚙️ Configuration Reference</a><br>
+            <a href="https://docs.openclaw.ai/tools/skills" target="_blank" style="color:var(--accent)">🧩 Skills system</a><br>
+            <a href="https://docs.openclaw.ai/tools/clawhub" target="_blank" style="color:var(--accent)">🦞 ClawHub marketplace</a><br>
+            <a href="https://docs.openclaw.ai/automation/cron-jobs" target="_blank" style="color:var(--accent)">⏰ Cron jobs</a><br>
+            <a href="https://docs.openclaw.ai/web/control-ui" target="_blank" style="color:var(--accent)">🌐 Control UI</a><br>
+            <a href="https://docs.openclaw.ai/gateway/doctor" target="_blank" style="color:var(--accent)">🩺 Doctor tool</a><br>
+            <a href="https://clawhub.ai" target="_blank" style="color:var(--accent)">🌍 ClawHub.ai — Registre de skills</a>
           </div>
         </div>
       </div>
