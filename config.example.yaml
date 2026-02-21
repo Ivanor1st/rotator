@@ -1,0 +1,50 @@
+keys:
+  ollama_cloud:
+    - label: Ollama Account 1
+      token: env:OLLAMA_CLOUD_TOKEN_1
+    - label: Ollama Account 2
+      token: env:OLLAMA_CLOUD_TOKEN_2
+  nvidia:
+    - label: Nvidia Account 1
+      key: env:NVIDIA_API_KEY_1
+  google:
+    - label: Google Account 1
+      key: env:GOOGLE_API_KEY_1
+  openrouter:
+    - label: OpenRouter Account 1
+      key: env:OPENROUTER_API_KEY_1
+
+settings:
+  port: 47822
+  db_file: rotator.db
+  require_auth_header: false
+  auth_bruteforce_protection: true
+  invalid_token_limit_per_minute: 12
+  invalid_token_window_seconds: 60
+  invalid_token_block_seconds: 120
+  notify_on_rotation: true
+  dashboard_language: fr
+  backups:
+    auto_backup_on_shutdown: true
+    auto_restore_latest_on_startup: true
+
+webhooks:
+  discord: ""
+  slack: ""
+  telegram_token: ""
+  telegram_chat_id: ""
+
+overrides:
+  coding: auto
+  reasoning: auto
+  chat: auto
+  long: auto
+  vision: auto
+  audio: auto
+  translate: auto
+  blocked: []
+
+compat_aliases:
+  claude-sonnet-4-6: coding
+  github/gpt5mini: coding
+  gpt-5-mini: coding

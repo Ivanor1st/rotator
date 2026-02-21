@@ -1,0 +1,17 @@
+    /* ══════════════════════════════════
+       SCROLLBAR
+    ══════════════════════════════════ */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a40; }
+
+    /* ══════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════ */
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); transition: transform .25s; }
+      .main { margin-left: 0; }
+      .main::before { left: 0; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }

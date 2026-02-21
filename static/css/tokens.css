@@ -1,0 +1,74 @@
+    /* ══════════════════════════════════
+       DESIGN TOKENS
+    ══════════════════════════════════ */
+    :root {
+      --bg:          #090909;
+      --bg-dot:      rgba(255,255,255,0.022);
+      --surface:     #111113;
+      --surface2:    #18181c;
+      --surface3:    #202026;
+      --border:      rgba(255,255,255,0.07);
+      --border-hi:   rgba(255,255,255,0.13);
+
+      --accent:      #f59e0b;
+      --accent-glow: rgba(245,158,11,0.18);
+      --accent-dim:  rgba(245,158,11,0.10);
+      --accent-bdr:  rgba(245,158,11,0.30);
+
+      --green:       #10b981;
+      --green-dim:   rgba(16,185,129,0.12);
+      --green-bdr:   rgba(16,185,129,0.28);
+
+      --red:         #ef4444;
+      --red-dim:     rgba(239,68,68,0.10);
+      --red-bdr:     rgba(239,68,68,0.28);
+
+      --blue:        #6366f1;
+      --blue-dim:    rgba(99,102,241,0.12);
+      --blue-bdr:    rgba(99,102,241,0.28);
+
+      --amber:       #f59e0b; /* alias kept for JS-generated HTML */
+      --amber-soft:  rgba(245,158,11,0.10);
+      --amber-border:rgba(245,158,11,0.30);
+
+      --text:        #ebebeb;
+      --text-dim:    #888;
+      --text-muted:  #4a4a52;
+
+      --font-ui:    'Syne', system-ui, sans-serif;
+      --font-mono:  'JetBrains Mono', monospace;
+
+      --r:    10px;   /* base radius */
+      --r-sm:  6px;
+      --r-lg: 14px;
+
+      --sidebar-w: 244px;
+
+      /* legacy compat for JS-generated classes */
+      --muted:   #4a4a52;
+      --muted2:  #888;
+      --amber:   #f59e0b;
+      --amber-soft: rgba(245,158,11,0.10);
+      --amber-border: rgba(245,158,11,0.30);
+      --green-soft: rgba(16,185,129,0.12);
+      --blue-soft: rgba(99,102,241,0.12);
+      --red-soft:  rgba(239,68,68,0.10);
+    }
+
+    /* ══════════════════════════════════
+       RESET & BASE
+    ══════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      background-image: radial-gradient(var(--bg-dot) 1px, transparent 1px);
+      background-size: 28px 28px;
+      color: var(--text);
+      display: flex;
+      min-height: 100vh;
+      font-size: 13.5px;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }

@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Config with potential secrets (only config.example.yaml is versioned)
+config.yaml
+config.local.yaml
+config.private.yaml
+
+# Runtime artifacts
+*.db
+*.db-*
+.proxy.pid
+
+# Backups and logs
+backups/
+*.log
+
+# Generated model caches (runtime)
+nvidia_models.json
+ollama_models_cloud.json
+openrouter_models.json
+
+# IDE / tool directories
+.zencoder/
+.zenflow/
+.gemini/
+
+# Internal project management docs
+AUDIT.md
+BLOC.md
+
+# Scratch / debug files (keep requirements.txt)
+*.txt
+!requirements.txt

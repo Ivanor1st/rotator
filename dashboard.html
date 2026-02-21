@@ -1,0 +1,1573 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>API Rotator</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090909'/%3E%3Crect x='1' y='1' width='30' height='30' rx='5.5' fill='none' stroke='%23f59e0b' stroke-width='1'/%3E%3Ctext x='50%25' y='56%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui' font-weight='900' font-size='13' fill='%23f59e0b'%3EAR%3C/text%3E%3C/svg%3E"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/css/dashboard.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     SIDEBAR
+══════════════════════════════════ -->
+<nav class="sidebar">
+
+  <!-- Brand -->
+  <div class="sidebar-brand">
+    <div class="brand-mark">AR</div>
+    <div>
+      <div class="brand-name">API Rotator</div>
+      <div class="brand-sub">Proxy intelligent</div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="sidebar-online" style="margin:12px 14px 0">
+    <span class="online-dot"></span>
+    <span>En ligne · Port <span id="sidebarPort" style="font-family:var(--font-mono)">47822</span></span>
+  </div>
+
+  <div class="nav-section-label">Navigation</div>
+
+  <div class="sidebar-nav">
+
+    <div class="nav-item top-tab active" onclick="showTab('routing')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2 6.5L8 2l6 4.5V14a1 1 0 01-1 1H9.5v-4h-3v4H3a1 1 0 01-1-1V6.5z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+      </svg>
+      <span>Vue d'ensemble</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('presets')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="5" cy="4" r="1.5" fill="currentColor"/>
+        <circle cx="11" cy="8" r="1.5" fill="currentColor"/>
+        <circle cx="7" cy="12" r="1.5" fill="currentColor"/>
+      </svg>
+      <span>Presets</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('tests')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M6 2v5L2.5 13.5a1 1 0 00.9 1.5h9.2a1 1 0 00.9-1.5L10 7V2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5 2h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Tests &amp; Benchmark</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('stats')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2 13V9m4 4V5m4 8V2m4 11V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Statistiques</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('logs')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2.5 4h11M2.5 8h11M2.5 12h6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Journal d'activité</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('keys')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <circle cx="6" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8.5 9.5l5 5M11 12l1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Mes clés API</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('projects')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M2 5a1 1 0 011-1h3l2 2h5a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V5z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+      </svg>
+      <span>Projets &amp; tokens</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('claudecode')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1C4.1 1 1 4.1 1 8s3.1 7 7 7 7-3.1 7-7S11.9 1 8 1z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M5.5 6.5L4 8l1.5 1.5M10.5 6.5L12 8l-1.5 1.5M9 5l-2 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Claude Code</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('backups')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M8 2a6 6 0 100 12A6 6 0 008 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M5.5 8.5l2 2 3-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Sauvegardes</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('catalogue')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      <span>Catalogue modèles</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('config')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Configuration</span>
+    </div>
+
+    <div class="nav-item top-tab" onclick="showTab('docs')">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Documentation</span>
+    </div>
+
+  </div>
+
+  <!-- Bottom -->
+  <div class="sidebar-bottom">
+    <div class="uptime-card">
+      <span class="uptime-label">Uptime</span>
+      <span class="uptime-val" id="uptime">00:00:00</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="sidebar-btn" onclick="pauseAll()">⏸ Pause</button>
+      <button class="sidebar-btn" onclick="resumeAll()">▶ Reprise</button>
+      <button class="sidebar-btn" onclick="reloadConfig()">↺ Reload</button>
+      <button class="sidebar-btn sidebar-btn-restart" onclick="restartProxy()">⟳ Restart</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════
+     MAIN
+══════════════════════════════════ -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title" id="pageTitle">Vue d'ensemble</div>
+      <div class="topbar-sub" id="pageDesc">État du routage et des providers en temps réel</div>
+    </div>
+    <button id="welcomeToggleBtn" onclick="toggleWelcome()" title="Afficher/masquer le panneau de bienvenue" style="
+      padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--r-sm); color: var(--text-dim); font-size: 13px;
+      cursor: pointer; flex-shrink: 0; transition: all .14s;
+      display: none;
+    " onmouseover="this.style.borderColor='var(--border-hi)';this.style.color='var(--text)'"
+       onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">👋</button>
+    <div class="topbar-stats">
+      <div class="stat-chip">
+        <span class="stat-chip-label">Requêtes</span>
+        <span class="stat-chip-val amber" id="totalReq">0</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-chip-label">Providers</span>
+        <span class="stat-chip-val green" id="activeProv">0</span>
+      </div>
+      <div class="stat-mode-wrap">
+        <span id="modeBadge" class="mode-badge">AUTO</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ══════════ VUE D'ENSEMBLE ══════════ -->
+    <div id="tab-routing" class="section top-section active">
+
+      <!-- Welcome banner -->
+      <div id="welcomeBanner" class="welcome-banner">
+        <div style="display:flex; gap:14px; align-items:flex-start">
+          <span style="font-size:26px; flex-shrink:0; line-height:1">👋</span>
+          <div style="flex:1">
+            <div style="font-size:15px; font-weight:800; color:#fff; margin-bottom:5px">Bienvenue sur API Rotator</div>
+            <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:12px">
+              Votre proxy fonctionne. Sans clé configurée, vous utilisez les modèles Ollama locaux comme fallback infini. Ajoutez des clés pour débloquer beaucoup plus de puissance gratuitement.
+            </div>
+            <div class="welcome-grid">
+              <div class="welcome-item">
+                <div class="welcome-item-label">🔵 Google Gemma</div>
+                <div class="welcome-item-desc">14 400 requêtes/jour par compte</div>
+              </div>
+              <div class="welcome-item">
+                <div class="welcome-item-label">🟢 NVIDIA NIM</div>
+                <div class="welcome-item-desc">40 rpm · modèles 744B MoE</div>
+              </div>
+              <div class="welcome-item">
+                <div class="welcome-item-label">☁️ Ollama Cloud</div>
+                <div class="welcome-item-desc">Modèles jusqu'à 397B</div>
+              </div>
+              <div class="welcome-item">
+                <div class="welcome-item-label">🔀 OpenRouter</div>
+                <div class="welcome-item-desc">Dizaines de modèles gratuits</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px">
+              <button class="primary" onclick="openKeysCenter()">🔑 Configurer mes clés</button>
+              <button onclick="toggleWelcome()">Masquer</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Ollama missing card -->
+      <div id="ollamaCard" style="display:none; background:var(--red-dim); border:1px solid var(--red-bdr); border-radius:var(--r-lg); padding:14px 18px; margin-bottom:16px; align-items:center; gap:14px">
+        <span style="font-size:22px">💻</span>
+        <div style="flex:1">
+          <div style="font-size:14px; font-weight:700; color:#fff">Modèles locaux non disponibles</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-top:2px">Ollama n'est pas détecté sur cette machine. Les modèles locaux servent de fallback infini — aucun quota, disponibles hors ligne.</div>
+        </div>
+        <button class="primary" onclick="installOllama()" id="ollamaInstallBtn">⬇ Installer Ollama</button>
+        <button onclick="checkOllama()">↺ Re-détecter</button>
+      </div>
+
+      <!-- Quick connect -->
+      <div class="onboard-card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color:var(--accent)"><path d="M8 1l1.8 5H15l-4.4 3.2 1.7 5.2L8 11.3l-4.3 3.1 1.7-5.2L1 6h5.2z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+          <span style="font-size:14px; font-weight:700; color:#fff">Connexion rapide</span>
+          <button class="ghost" style="margin-left:auto; font-size:11px" onclick="openKeysCenter()">Gérer mes clés →</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:14px">Copiez ces informations dans votre application</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
+          <div>
+            <div style="font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; font-weight:700">Base URL</div>
+            <div class="copy-row" style="margin-top:0">
+              <span class="copy-val" id="onboardBase">http://localhost:47822/v1</span>
+              <button class="copy-btn" onclick="copyFrom('onboardBase', this)">📋</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; font-weight:700">Clé API</div>
+            <div class="copy-row" style="margin-top:0">
+              <span class="copy-val">rotator</span>
+              <button class="copy-btn" onclick="copyText('rotator', this)">📋</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; font-weight:700">Modèles disponibles</div>
+            <div class="copy-row" style="margin-top:0">
+              <span class="copy-val" id="onboardModels">http://localhost:47822/v1/models</span>
+              <button class="copy-btn" onclick="copyFrom('onboardModels', this)">📋</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profiles -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+        <div>
+          <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px">Profils de routage</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-top:2px">Sélection automatique du meilleur modèle disponible par profil</div>
+        </div>
+      </div>
+      <div class="grid-auto" id="profileCards" style="margin-bottom:22px"></div>
+
+      <!-- Providers -->
+      <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px; margin-bottom:2px">État des providers</div>
+      <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Clés actives, quotas et contrôles</div>
+      <div class="grid-2" id="providerGrid" style="margin-bottom:22px"></div>
+
+      <!-- Security -->
+      <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px; margin-bottom:2px">Sécurité</div>
+      <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Mode auth et protection anti brute-force</div>
+      <div id="securityCard" class="card" style="margin-bottom:22px"></div>
+
+      <div id="suggestions"></div>
+    </div>
+
+    <!-- ══════════ PRESETS ══════════ -->
+    <div id="tab-presets" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Presets de routage</div>
+        <div class="page-desc">Créez et appliquez des configurations nommées pour basculer rapidement entre différents modes</div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px">Bibliothèque</div>
+          <div id="presetList" class="flex-col"></div>
+          <button class="primary" style="margin-top:12px; width:100%" onclick="newPreset()">+ Nouveau preset</button>
+        </div>
+        <div>
+          <div style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px">Éditeur de preset</div>
+          <div class="card">
+            <div id="presetEditor"></div>
+            <hr class="divider">
+            <div class="flex-col">
+              <input id="presetName" placeholder="Nom du preset (ex: Mode Puissance Max)"/>
+              <input id="presetDesc" placeholder="Description courte"/>
+            </div>
+            <div class="flex-row" style="margin-top:12px">
+              <button class="primary" onclick="savePreset()">💾 Sauvegarder</button>
+              <button onclick="applyPresetTemp()">▶ Appliquer sans sauvegarder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ TESTS ══════════ -->
+    <div id="tab-tests" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Tests &amp; Benchmark</div>
+        <div class="page-desc">Vérifiez que chaque provider répond correctement, mesurez les performances et comparez les modèles</div>
+      </div>
+      <div class="card">
+        <div class="subtabs">
+          <button class="subtab sub-tab active" onclick="showSubTab('unit')">Tests rapides</button>
+          <button class="subtab sub-tab" onclick="showSubTab('bench')">Benchmark vitesse</button>
+          <button class="subtab sub-tab" onclick="showSubTab('compare')">Comparer des modèles</button>
+        </div>
+
+        <div id="sub-unit" class="sub-section active">
+          <div class="flex-row" style="margin-bottom:14px">
+            <button class="primary" onclick="runAllTests()">▶ Tout tester</button>
+            <button onclick="exportTestResults()">⬇ Exporter JSON</button>
+          </div>
+          <div id="testsList" class="flex-col"></div>
+
+          <div class="card" style="margin-top:14px; background:var(--surface2)">
+            <div class="card-title">
+              <span class="card-title-icon">🔑</span>
+              Centre de test des clés API
+            </div>
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">Test séquentiel des clés cloud. Vert = OK, orange = quota/avertissement, rouge = défaut/réseau.</div>
+            <div class="flex-row" style="margin-bottom:10px">
+              <button class="primary" onclick="testAllKeysCenter()">🧪 Tester toutes les clés</button>
+              <button onclick="loadKeyTestCenter()">↺ Recharger les clés</button>
+            </div>
+            <div id="keyTestCenterStatus" class="status-line"></div>
+            <div id="keyTestCenterHost" class="flex-col" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <div id="sub-bench" class="sub-section">
+          <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">Envoie un prompt standard à chaque modèle et mesure temps de réponse, tokens/s et qualité.</div>
+          <div class="flex-row" style="margin-bottom:14px">
+            <button class="primary" onclick="startBenchmark()">▶ Lancer le benchmark</button>
+            <button onclick="stopBenchmark()">⏹ Arrêter</button>
+          </div>
+          <div id="benchTable"></div>
+        </div>
+
+        <div id="sub-compare" class="sub-section">
+          <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">Envoyez le même prompt à plusieurs modèles simultanément et comparez les réponses.</div>
+          <textarea id="comparePrompt" rows="4" style="width:100%; margin-bottom:10px" placeholder="Entrez votre prompt ici..."></textarea>
+          <div class="flex-row" style="margin-bottom:14px">
+            <select id="compareM1" style="flex:1; width:auto"></select>
+            <select id="compareM2" style="flex:1; width:auto"></select>
+            <select id="compareM3" style="flex:1; width:auto"></select>
+            <button class="primary" onclick="runCompare()">▶ Comparer</button>
+          </div>
+          <div id="compareResults" class="grid-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ STATS ══════════ -->
+    <div id="tab-stats" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Statistiques</div>
+        <div class="page-desc">Analyse détaillée de l'utilisation, des performances et des quotas restants</div>
+      </div>
+      <div class="flex-row" style="align-items:center; margin-bottom:18px">
+        <select id="statsRange" onchange="refreshStats()" style="width:160px">
+          <option value="today">Aujourd'hui</option>
+          <option value="week">7 derniers jours</option>
+          <option value="month">30 derniers jours</option>
+        </select>
+        <button onclick="exportStats()">⬇ Exporter CSV</button>
+      </div>
+      <div class="grid-3" id="kpi" style="margin-bottom:18px"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span class="card-title-icon">📈</span>Requêtes par provider</div>
+          <canvas id="chartProviders"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="card-title-icon">🍩</span>Répartition par profil</div>
+          <canvas id="chartProfiles"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ LOGS ══════════ -->
+    <div id="tab-logs" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Journal d'activité</div>
+        <div class="page-desc">Toutes les requêtes, rotations et événements système en temps réel</div>
+      </div>
+      <div class="card">
+        <div class="flex-row" style="margin-bottom:14px; align-items:center">
+          <input id="logSearch" placeholder="Filtrer par profil, provider, modèle..." style="flex:1; width:auto" oninput="renderLogs()"/>
+          <button onclick="clearLogs()">🗑 Vider</button>
+          <button onclick="exportLogs()">⬇ Exporter</button>
+        </div>
+        <div id="logs" class="log-viewer log"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ KEYS ══════════ -->
+    <div id="tab-keys" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Mes clés API</div>
+        <div class="page-desc">Gérez vos clés pour chaque fournisseur. Testez-les individuellement avant de sauvegarder.</div>
+      </div>
+      <div class="notice-bar" style="margin-bottom:18px">
+        <span>⚠️</span>
+        <span>Vos clés sont stockées dans <span class="mono">config.yaml</span> en texte clair. Ne versionnez jamais ce fichier avec des clés réelles.</span>
+      </div>
+      <div class="flex-row" style="margin-bottom:14px">
+        <button class="primary" onclick="saveKeysCenter()">💾 Enregistrer toutes les clés</button>
+        <button onclick="loadKeysCenter()">↺ Recharger</button>
+        <button onclick="reloadConfig()">⚙ Recharger le proxy</button>
+        <button onclick="exportKeys()">⬇ Export JSON</button>
+        <button onclick="document.getElementById('keysImportInput').click()">⬆ Import JSON</button>
+        <input id="keysImportInput" type="file" accept="application/json" style="display:none; width:auto" onchange="importKeys(event)"/>
+      </div>
+      <div id="keysStatus" class="status-line"></div>
+      <div id="keysProviders" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:14px; margin-top:10px"></div>
+    </div>
+
+    <!-- ══════════ PROJECTS ══════════ -->
+    <div id="tab-projects" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Projets &amp; tokens</div>
+        <div class="page-desc">Créez des tokens par projet pour isoler quotas, logs et politiques d'accès.</div>
+      </div>
+      <div class="grid-2" style="margin-bottom:14px">
+        <div class="card">
+          <div class="card-title">➕ Nouveau projet</div>
+          <div class="flex-col">
+            <input id="projectName" placeholder="Nom projet (ex: claude-code)"/>
+            <div class="grid-2">
+              <input id="projectDailyLimit" type="number" min="0" placeholder="Quota / jour" style="width:auto"/>
+              <select id="projectPolicy" style="width:auto">
+                <option value="full_access">full_access</option>
+                <option value="coding_only">coding_only</option>
+              </select>
+            </div>
+            <select id="projectQuotaMode" style="width:auto">
+              <option value="hard_block">hard_block (429)</option>
+              <option value="local_only">local_only (fallback local)</option>
+              <option value="alert_only">alert_only (alerte seulement)</option>
+            </select>
+            <button class="primary" onclick="createProjectFromForm()">Créer token projet</button>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:14px 16px" onclick="showTab('claudecode'); showCCTab('connect')" title="Ouvrir la page Claude Code">
+          <div style="flex:1">
+            <div class="card-title">🤖 Onboarding Claude</div>
+            <div style="font-size:12px; color:var(--text-dim); margin-top:6px">Créer un token dédié et lancer Claude Code — cliquez pour ouvrir la page Claude Code.</div>
+          </div>
+          <div style="display:flex; gap:18px; align-items:center; margin-left:18px">
+            <div style="text-align:center">
+              <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.6px">Projets Claude</div>
+              <div id="claudeSummaryCount" style="font-size:26px; font-weight:900; color:#fff; margin-top:6px">0</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.6px">Requêtes aujourd'hui</div>
+              <div id="claudeSummaryRequests" style="font-size:26px; font-weight:900; color:#fff; margin-top:6px">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="projectsStatus" class="status-line"></div>
+      <div id="projectsList" class="flex-col"></div>
+    </div>
+
+    <!-- ══════════ CLAUDE CODE ══════════ -->
+    <div id="tab-claudecode" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Claude Code</div>
+        <div class="page-desc">Gérez vos sessions Claude Code, épinglez des modèles, lancez des projets et consultez l'historique.</div>
+      </div>
+
+      <!-- Subtabs -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="subtabs">
+          <button class="subtab cc-tab active" onclick="showCCTab('connect')">🔌 Connexion</button>
+          <button class="subtab cc-tab" onclick="showCCTab('browse')">📋 Modèles disponibles</button>
+          <button class="subtab cc-tab" onclick="showCCTab('models')">📌 Modèle épinglé</button>
+          <button class="subtab cc-tab" onclick="showCCTab('sessions')">💬 Sessions</button>
+          <button class="subtab cc-tab" onclick="showCCTab('memory')">🧷 Mémoire &amp; fichiers</button>
+        </div>
+      </div>
+
+      <!-- CC Connect -->
+      <div id="cc-connect" class="cc-section">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">🚀 Lancement rapide</div>
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+              Crée un token projet dédié puis lance Claude Code dans un terminal pré-configuré.
+            </div>
+            <div class="flex-col">
+              <input id="ccProjectName" placeholder="Nom du projet (optionnel)" />
+              <input id="ccDailyLimit" type="number" min="0" placeholder="Quota / jour (optionnel)" style="width:auto"/>
+              <input id="ccWorkDir" placeholder="Dossier de travail (ex: D:\Projects\myapp)" />
+              <div style="font-size:11px; color:var(--text-dim); margin:-4px 0 2px 4px">
+                ⚠️ Si vide, une fenêtre vous demandera le dossier avant de lancer.
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim)">
+                <input id="ccInstallClaude" type="checkbox" checked style="width:auto"/> Installer Claude CLI si absent
+              </label>
+              <div class="skills-inline-widget" onclick="ccShowSkillsModal()" id="ccSkillsWidget">
+                <div class="skills-inline-head">
+                  <span class="skills-inline-label">🧩 Skills Claude Code</span>
+                  <span class="skills-inline-count" id="ccSkillsCountInline">6 skills</span>
+                </div>
+                <div class="skills-preview-pills" id="ccSkillsPreviewPills"></div>
+                <div class="skills-inline-hint">Cliquer pour modifier la selection ›</div>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap">
+                <button class="primary" onclick="ccLaunchSession()">▶ Créer token + lancer</button>
+                <button onclick="ccCreateProjectOnly()">📋 Créer projet (copier commande)</button>
+              </div>
+            </div>
+            <div id="ccLaunchStatus" class="status-line" style="margin-top:8px"></div>
+
+            <!-- Zone commande générée (hidden par défaut) -->
+            <div id="ccGeneratedCmdBox" style="display:none; margin-top:14px; padding:14px; background:var(--bg); border:1px solid var(--accent); border-radius:var(--r-lg); position:relative">
+              <div style="font-size:13px; font-weight:700; color:var(--accent); margin-bottom:8px">🎯 Commande prête — copiez et collez dans n'importe quel terminal</div>
+              <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px">
+                Fonctionne dans PowerShell, terminal VS Code, JetBrains, etc.
+              </div>
+              <pre id="ccGeneratedCmd" style="font-family:var(--font-mono); font-size:11.5px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:12px; white-space:pre-wrap; word-break:break-all; line-height:1.7; color:#fff; max-height:260px; overflow-y:auto"></pre>
+              <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+                <button class="primary" onclick="ccCopyGeneratedCmd()" id="ccCopyGenBtn">📋 Copier la commande</button>
+                <button onclick="ccCopyGeneratedCmdBash()" id="ccCopyGenBashBtn" title="Version bash/zsh">🐧 Version Bash</button>
+                <button class="danger" onclick="document.getElementById('ccGeneratedCmdBox').style.display='none'">✕ Fermer</button>
+              </div>
+              <div id="ccGeneratedCmdNote" style="font-size:11px; color:var(--text-dim); margin-top:8px"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📋 Configuration manuelle</div>
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+              Copiez ces variables d'environnement pour configurer Claude Code manuellement :
+            </div>
+            <div id="ccManualEnv" style="font-family:var(--font-mono); font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; line-height:1.7">
+              <div>$env:ANTHROPIC_BASE_URL = "http://localhost:<span id="ccPort">47822</span>"</div>
+              <div>$env:ANTHROPIC_AUTH_TOKEN = "<em style="color:var(--text-dim)">&lt;votre token projet&gt;</em>"</div>
+              <div style="color:var(--text-dim)"># puis lancer :</div>
+              <div>claude --model coding</div>
+            </div>
+            <div style="margin-top:10px">
+              <div style="font-size:11px; color:var(--text-dim); margin-bottom:6px">Sélectionnez un token projet existant :</div>
+              <select id="ccExistingToken" style="width:100%; margin-bottom:8px"></select>
+              <button onclick="ccCopyEnv()">📋 Copier les commandes</button>
+            </div>
+
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border)">
+              <div class="card-title" style="margin-bottom:6px">💡 Comment ça marche ?</div>
+              <div style="font-size:11.5px; color:var(--text-dim); line-height:1.6">
+                <strong style="color:#fff">coding</strong> = profil recommandé. Le rotator choisit automatiquement le meilleur modèle disponible parmi tous vos providers.<br>
+                <strong style="color:#fff">nom_modele</strong> = force un modèle spécifique (ex: <span class="mono">qwen3-coder-next:cloud</span>).<br><br>
+                Consultez l'onglet <a href="#" onclick="event.preventDefault();showCCTab('browse')" style="color:var(--accent); text-decoration:underline; font-weight:700; cursor:pointer">📋 Modèles disponibles</a> pour voir tous les modèles classés par type avec des boutons pour copier.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Claude sessions -->
+        <div style="margin-top:16px">
+          <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px; margin-bottom:8px">Sessions Claude actives</div>
+          <div id="ccActiveList" class="flex-col">
+            <div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center">Chargement...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CC Browse Models -->
+      <div id="cc-browse" class="cc-section" style="display:none">
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title">📋 Tous les modèles disponibles via le rotator</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">
+            Ces modèles sont exposés par <span class="mono">GET /v1/models</span>. Utilisez <span class="mono">claude --model &lt;id&gt;</span> pour forcer un modèle spécifique, ou <span class="mono">claude --model coding</span> pour la rotation automatique (recommandé).
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px">
+            <input id="ccBrowseSearch" placeholder="Rechercher un modèle..." style="flex:1; min-width:200px" oninput="ccFilterBrowse()"/>
+            <select id="ccBrowseFilter" onchange="ccFilterBrowse()" style="width:160px">
+              <option value="">Tous les profils</option>
+              <option value="coding">🔧 Coding</option>
+              <option value="reasoning">🧠 Reasoning</option>
+              <option value="chat">💬 Chat</option>
+              <option value="long">📄 Long context</option>
+              <option value="vision">👁️ Vision</option>
+              <option value="audio">🎤 Audio</option>
+              <option value="translate">🌐 Translate</option>
+            </select>
+            <select id="ccBrowseProvider" onchange="ccFilterBrowse()" style="width:160px">
+              <option value="">Tous les providers</option>
+            </select>
+            <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-dim); cursor:pointer">
+              <input id="ccBrowseCodingOnly" type="checkbox" style="width:auto" onchange="ccFilterBrowse()"/> Masquer incompatibles Claude Code
+            </label>
+            <button onclick="ccLoadBrowse()">↺ Actualiser</button>
+          </div>
+        </div>
+        <div id="ccBrowseGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:10px"></div>
+        <div id="ccBrowseEmpty" style="display:none; color:var(--text-muted); font-size:12px; padding:30px; text-align:center">Aucun modèle trouvé.</div>
+      </div>
+
+      <!-- CC Models (pinned) -->
+      <div id="cc-models" class="cc-section" style="display:none">
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title">📌 Modèle épinglé pour Claude Code</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+            Épinglez un modèle spécifique pour le profil <span class="mono">coding</span>. Toutes les sessions Claude Code utilisant <span class="mono">--model coding</span> passeront par ce modèle au lieu de la rotation automatique.
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+            <select id="ccModelSelect" style="flex:1; min-width:200px"></select>
+            <button class="primary" onclick="ccPinModel()">📌 Épingler ce modèle</button>
+            <button onclick="ccUnpinModel()">🔓 Remettre en auto</button>
+          </div>
+          <div id="ccModelStatus" class="status-line" style="margin-top:8px"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📊 Profil Coding — état actuel</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">
+            Affiche le modèle et le provider actuellement sélectionnés par le routeur pour les tâches <span class="mono">coding</span>.
+          </div>
+          <div id="ccCodingProfile" style="font-family:var(--font-mono); font-size:12px; padding:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r)">
+            Chargement...
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-title">🔀 Aliases compatibles</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+            Ces noms de modèles sont automatiquement redirigés vers le profil <span class="mono">coding</span> :
+          </div>
+          <div id="ccAliasesList" style="font-family:var(--font-mono); font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px">
+            Chargement...
+          </div>
+        </div>
+      </div>
+
+      <!-- CC Sessions (history) -->
+      <div id="cc-sessions" class="cc-section" style="display:none">
+        <div class="card">
+          <div class="card-title">💬 Historique des requêtes</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+            Requêtes récentes passées via le proxy. Filtrez par profil ou recherchez par modèle/provider.
+          </div>
+          <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; align-items:center">
+            <select id="ccSessionProject" style="width:200px" onchange="ccLoadSessions()">
+              <option value="">Tous les projets</option>
+            </select>
+            <input id="ccSessionSearch" placeholder="Rechercher..." oninput="ccFilterSessions()" style="flex:1; min-width:150px"/>
+            <button onclick="ccLoadSessions()">↺ Actualiser</button>
+          </div>
+          <div id="ccSessionList" class="flex-col">
+            <div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center">Chargement...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CC Memory -->
+      <div id="cc-memory" class="cc-section" style="display:none">
+        <div class="card">
+          <div class="card-title">🧷 Mémoire Claude Code</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+            Claude Code stocke sa mémoire dans des fichiers <span class="mono">CLAUDE.md</span> à la racine de vos projets.
+            Sélectionnez un dossier de travail pour inspecter et éditer ces fichiers.
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px">
+            <input id="ccMemoryDir" placeholder="Chemin du projet (ex: D:\Projects\myapp)" style="flex:1"/>
+            <button class="primary" onclick="ccLoadMemory()">🔍 Scanner</button>
+          </div>
+          <div id="ccMemoryStatus" class="status-line" style="margin-bottom:8px"></div>
+          <div id="ccMemoryContent" style="display:none">
+            <div style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px">CLAUDE.md</div>
+            <textarea id="ccMemoryEditor" style="width:100%; min-height:300px; font-family:var(--font-mono); font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; color:var(--text); resize:vertical"></textarea>
+            <div style="margin-top:8px; display:flex; gap:8px; justify-content:flex-end">
+              <button onclick="ccSaveMemory()">💾 Sauvegarder</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-title">📂 Fichiers de configuration Claude</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+            Emplacements standards des fichiers de configuration et mémoire Claude Code :
+          </div>
+          <div style="font-family:var(--font-mono); font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:12px; line-height:1.8">
+            <div><span style="color:var(--accent)">~/.claude/</span> — Répertoire principal Claude Code</div>
+            <div><span style="color:var(--accent)">~/.claude/settings.json</span> — Configuration globale</div>
+            <div><span style="color:var(--accent)">&lt;projet&gt;/CLAUDE.md</span> — Mémoire projet (instructions persistantes)</div>
+            <div><span style="color:var(--accent)">&lt;projet&gt;/.claude/settings.local.json</span> — Config locale projet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ BACKUPS ══════════ -->
+    <div id="tab-backups" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Sauvegardes</div>
+        <div class="page-desc">Snapshots de la base de données, restauration d'état, suppression et réinitialisation.</div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:14px">
+        <div class="card">
+          <div class="card-title">⚙️ Options automatiques</div>
+          <div class="flex-col" style="gap:10px">
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer">
+              <input id="maintenanceAutoBackup" type="checkbox" checked style="width:auto"/>
+              Créer un backup avant toute action destructive
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer">
+              <input id="autoBackupOnShutdown" type="checkbox" checked style="width:auto"/>
+              Backup automatique à l'arrêt du proxy
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer">
+              <input id="autoRestoreLatestOnStartup" type="checkbox" checked style="width:auto"/>
+              Restaurer automatiquement le dernier backup au démarrage
+            </label>
+            <button onclick="saveMaintenanceSettings()">💾 Enregistrer ces options</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🛠 Actions manuelles</div>
+          <div class="flex-col" style="gap:8px">
+            <div class="flex-row">
+              <button class="primary" onclick="createBackupNow()">💾 Backup maintenant</button>
+              <button onclick="restoreLatestBackup()">♻ Restaurer le dernier</button>
+              <button onclick="scheduleRestoreLatestBackup()">⏭ Restaurer au démarrage</button>
+            </div>
+            <div class="flex-row">
+              <input id="purgeBeforeDate" type="date" style="width:auto; flex:1"/>
+              <button onclick="purgeDataBeforeDate()">🗑 Purger avant date</button>
+            </div>
+            <button class="danger" onclick="resetAllData()">♻ Réinitialiser toutes les données</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+        <div>
+          <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px">Snapshots disponibles</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-top:2px">Cliquez sur Restaurer pour revenir à un état antérieur</div>
+        </div>
+        <button onclick="loadBackups()">↺ Recharger</button>
+      </div>
+      <div id="maintenanceStatus" class="status-line" style="margin-bottom:10px"></div>
+      <div id="backupList" class="flex-col"></div>
+    </div>
+
+    <!-- ══════════ CONFIG ══════════ -->
+    <div id="tab-config" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Configuration</div>
+        <div class="page-desc">Modifiez les paramètres du proxy. Rechargez sans redémarrer.</div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px">Éditeur YAML</div>
+          <div class="notice-bar" style="margin-bottom:10px">
+            <span>🔐</span>
+            <span>Zone sensible: ce fichier contient des clés API en clair. Utilisez <strong>Voir</strong> (lecture seule) ou <strong>Modifier</strong> (édition) après avertissement.</span>
+          </div>
+          <div class="config-editor-shell">
+            <textarea id="configEditor" class="mono is-protected" readonly></textarea>
+            <div id="configGuard" class="config-guard">
+              <div class="config-guard-box">
+                <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:6px">⚠️ Accès au YAML protégé</div>
+                <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">En affichant ou modifiant cette zone, vos clés API deviennent visibles à l'écran. Vérifiez que personne ne regarde votre écran.</div>
+                <div class="flex-row">
+                  <button onclick="unlockConfigEditor('view')">👁 Voir</button>
+                  <button class="primary" onclick="unlockConfigEditor('edit')">✏ Modifier</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="configStatus" class="status-line"></div>
+          <div class="flex-row" style="margin-top:10px">
+            <button id="saveConfigBtn" class="primary" onclick="saveConfig()">💾 Sauvegarder et recharger</button>
+            <button onclick="loadConfig()">↺ Annuler</button>
+            <button onclick="lockConfigEditor()">🔒 Reverrouiller</button>
+          </div>
+        </div>
+        <div class="flex-col">
+          <div class="card">
+            <div class="card-title">⚡ Réglages rapides</div>
+            <div class="flex-row" style="align-items:center">
+              <label style="font-size:12px; color:var(--text-dim); flex:1">Port</label>
+              <input id="configPort" type="number" style="width:100px" placeholder="47822"/>
+            </div>
+            <div class="flex-row" style="margin-top:8px; align-items:center">
+              <label style="font-size:12px; color:var(--text-dim); flex:1">Langue</label>
+              <select id="configLang" style="width:100px">
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <button class="primary" style="margin-top:12px; width:100%" onclick="applyQuickConfig()">Appliquer</button>
+          </div>
+          <div class="card">
+            <div class="card-title">🕐 Planification</div>
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">Automatisez des actions à des horaires précis</div>
+            <div class="flex-col" style="gap:7px">
+              <input id="schedName"   placeholder="Nom (ex: Nuit économique)"/>
+              <div class="grid-2">
+                <input id="schedAction" placeholder="action (ex: block)"/>
+                <input id="schedTarget" placeholder="cible (ex: gemini_flash)"/>
+              </div>
+              <div class="grid-2">
+                <input id="schedStart" placeholder="Début 22:00"/>
+                <input id="schedEnd"   placeholder="Fin 07:00"/>
+              </div>
+              <input id="schedDays"  placeholder="Jours: mon,tue,wed,... ou all"/>
+              <input id="schedValue" placeholder="Valeur (optionnel)" style="display:none"/>
+              <button class="primary" onclick="addSchedule()">+ Ajouter cette planification</button>
+            </div>
+            <div id="scheduleList" class="flex-col" style="margin-top:12px"></div>
+          </div>
+          
+          <div class="card">
+            <div class="card-title">🧹 Maintenance</div>
+            <div style="font-size:12px; color:var(--text-dim)">Accédez à la page Sauvegardes pour restaurer un snapshot, purger l'historique ou réinitialiser.</div>
+            <div class="flex-row" style="margin-top:10px">
+              <button onclick="showTab('backups')">Ouvrir la page Sauvegardes</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ CATALOGUE ══════════ -->
+    <div id="tab-catalogue" class="section top-section">
+      <div class="page-header">
+        <div class="page-title">Catalogue de modèles</div>
+        <div class="page-desc">Parcourez les modèles disponibles, installez-les localement ou ajoutez-les dans votre rotator</div>
+        <div style="margin-top:8px; display:flex; gap:10px; align-items:center">
+          <button class="primary" onclick="refreshAllCatalogues(this)" style="font-size:12px; padding:6px 14px">↺ Rafraîchir tous les catalogues</button>
+          <span id="catalogueRefreshStatus" style="font-size:11px; color:var(--text-dim)"></span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="subtabs">
+          <button class="subtab cat-tab active" onclick="showCatTab('ollama')">☁️ Ollama</button>
+          <button class="subtab cat-tab" onclick="showCatTab('openrouter')">🔀 OpenRouter (gratuits)</button>
+          <button class="subtab cat-tab" onclick="showCatTab('nvidia')">🟢 NVIDIA NIM</button>
+          <button class="subtab cat-tab" onclick="showCatTab('local')">💻 Installés localement</button>
+        </div>
+      </div>
+
+      <div id="cat-ollama" class="cat-section">
+        <div class="card" style="margin-bottom:14px">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+            <input id="ollamaSearch" placeholder="Rechercher un modèle..." style="flex:1; min-width:200px; width:auto" oninput="filterOllamaModels()"/>
+            <select id="ollamaFilterType" onchange="filterOllamaModels()" style="width:140px">
+              <option value="">Tous les types</option>
+              <option value="cloud">☁️ Cloud</option>
+              <option value="local">💻 Local</option>
+              <option value="vision">👁️ Vision</option>
+              <option value="tools">🔧 Tools</option>
+              <option value="thinking">🧠 Thinking</option>
+            </select>
+            <select id="ollamaFilterSize" onchange="filterOllamaModels()" style="width:140px">
+              <option value="">Toutes tailles</option>
+              <option value="tiny">Tiny (&lt; 2GB)</option>
+              <option value="small">Small (2-8GB)</option>
+              <option value="medium">Medium (8-30GB)</option>
+              <option value="large">Large (30GB+)</option>
+            </select>
+            <button onclick="loadOllamaModels()">↺ Actualiser</button>
+          </div>
+        </div>
+        <div id="ollamaModelGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
+        <div id="ollamaLoading" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px">Chargement du catalogue...</div>
+      </div>
+
+      <div id="cat-openrouter" class="cat-section" style="display:none">
+        <div style="background:var(--accent-dim); border:1px solid var(--accent-bdr); border-radius:var(--r); padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--accent)">
+          💡 Seuls les modèles gratuits (pricing = 0) sont affichés. Nécessite une clé OpenRouter configurée.
+        </div>
+        <div id="openrouterModelGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
+        <div id="openrouterLoading" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px">Chargement...</div>
+      </div>
+
+      <div id="cat-nvidia" class="cat-section" style="display:none">
+        <div style="background:var(--green-dim); border:1px solid var(--green-bdr); border-radius:var(--r); padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--green)">
+          ✅ Tous ces modèles sont accessibles avec vos clés NVIDIA. Une seule clé donne accès à l'ensemble du catalogue.
+        </div>
+        <div id="nvidiaModelGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
+        <div id="nvidiaLoading" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px">Chargement...</div>
+      </div>
+
+      <div id="cat-local" class="cat-section" style="display:none">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+          <div style="font-size:12.5px; color:var(--text-dim)">Modèles installés sur cette machine via Ollama</div>
+          <button onclick="loadLocalModels()">↺ Actualiser</button>
+        </div>
+        <div id="localModelGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
+      </div>
+    </div>
+
+    <!-- ══════════ DOCUMENTATION ══════════ -->
+    <div id="tab-docs" class="section top-section">
+      <div class="docs-layout">
+
+        <!-- Docs sidebar nav -->
+        <div class="docs-sidebar">
+          <div class="docs-sidebar-title">Navigation</div>
+          <div class="docs-nav-item active" onclick="showDocsSection('intro')">🚀 Introduction</div>
+          <div class="docs-nav-item" onclick="showDocsSection('quickstart')">⚡ Démarrage rapide</div>
+          <div class="docs-nav-sep"></div>
+          <div class="docs-nav-group">API</div>
+          <div class="docs-nav-item" onclick="showDocsSection('endpoints')">🔌 Endpoints</div>
+          <div class="docs-nav-item" onclick="showDocsSection('providers')">🔀 Providers</div>
+          <div class="docs-nav-item" onclick="showDocsSection('profiles')">🧩 Profils de routage</div>
+          <div class="docs-nav-sep"></div>
+          <div class="docs-nav-group">Avancé</div>
+          <div class="docs-nav-item" onclick="showDocsSection('keys')">🔑 Gestion des clés</div>
+          <div class="docs-nav-item" onclick="showDocsSection('projects')">🧷 Projets & tokens</div>
+          <div class="docs-nav-item" onclick="showDocsSection('scheduling')">🕐 Planification</div>
+          <div class="docs-nav-item" onclick="showDocsSection('security')">🔐 Sécurité</div>
+          <div class="docs-nav-sep"></div>
+          <div class="docs-nav-group">Référence</div>
+          <div class="docs-nav-item" onclick="showDocsSection('troubleshooting')">🛠 Dépannage</div>
+          <div class="docs-nav-item" onclick="showDocsSection('readme')">📄 README brut</div>
+        </div>
+
+        <!-- Docs content -->
+        <div class="docs-content">
+
+          <!-- INTRO -->
+          <div id="docs-intro" class="docs-section active">
+            <div class="doc-hero">
+              <div class="doc-hero-badge">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                v1.0 · Proxy intelligent
+              </div>
+              <div class="doc-hero-title">API Rotator</div>
+              <div class="doc-hero-desc">
+                Un proxy local compatible OpenAI qui route automatiquement vos requêtes vers le meilleur modèle disponible parmi vos providers configurés, avec rotation des clés, gestion des quotas et fallback automatique.
+              </div>
+              <div style="display:flex; gap:8px; margin-top:18px">
+                <button class="primary" onclick="showDocsSection('quickstart')">⚡ Démarrage rapide</button>
+                <button onclick="showDocsSection('endpoints')">🔌 Voir les endpoints</button>
+              </div>
+            </div>
+
+            <div class="doc-grid-features">
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">🔀</div>
+                <div class="doc-feature-title">Rotation automatique</div>
+                <div class="doc-feature-desc">Distribue les requêtes entre vos clés pour éviter les limites de débit.</div>
+              </div>
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">🧠</div>
+                <div class="doc-feature-title">Routage par profil</div>
+                <div class="doc-feature-desc">7 profils prédéfinis (coding, reasoning, chat…) avec sélection du meilleur modèle.</div>
+              </div>
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">🔄</div>
+                <div class="doc-feature-title">Fallback automatique</div>
+                <div class="doc-feature-desc">Si un provider échoue, le suivant est utilisé transparemment.</div>
+              </div>
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">💻</div>
+                <div class="doc-feature-title">Ollama local</div>
+                <div class="doc-feature-desc">Fallback infini sur vos modèles locaux. Aucun quota, disponible hors ligne.</div>
+              </div>
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">🔑</div>
+                <div class="doc-feature-title">Multi-clés</div>
+                <div class="doc-feature-desc">Ajoutez plusieurs clés par provider pour multiplier vos quotas gratuits.</div>
+              </div>
+              <div class="doc-feature-card">
+                <div class="doc-feature-icon">📊</div>
+                <div class="doc-feature-title">Dashboard temps réel</div>
+                <div class="doc-feature-desc">Monitoring des quotas, logs d'activité et statistiques détaillées.</div>
+              </div>
+            </div>
+
+            <div class="doc-block">
+              <div class="doc-block-header">
+                <span class="doc-block-title">Providers supportés</span>
+              </div>
+              <table class="doc-table">
+                <thead><tr><th>Provider</th><th>Type</th><th>Quota gratuit</th><th>Modèles notables</th></tr></thead>
+                <tbody>
+                  <tr><td>🔵 Google AI</td><td><span class="badge green" style="font-size:10px">Cloud</span></td><td class="dim-cell">14 400 req/jour</td><td class="mono-cell">gemini-flash, gemini-pro</td></tr>
+                  <tr><td>🟢 NVIDIA NIM</td><td><span class="badge green" style="font-size:10px">Cloud</span></td><td class="dim-cell">40 req/min</td><td class="mono-cell">llama-3.1-405B, mistral-large</td></tr>
+                  <tr><td>🔀 OpenRouter</td><td><span class="badge green" style="font-size:10px">Cloud</span></td><td class="dim-cell">Variable par modèle</td><td class="mono-cell">qwen, deepseek, phi...</td></tr>
+                  <tr><td>☁️ Ollama Cloud</td><td><span class="badge blue" style="font-size:10px">Cloud</span></td><td class="dim-cell">Généreux</td><td class="mono-cell">jusqu'à 397B</td></tr>
+                  <tr><td>💻 Ollama Local</td><td><span class="badge amber" style="font-size:10px">Local</span></td><td class="dim-cell">Illimité</td><td class="mono-cell">tout modèle installé</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- QUICKSTART -->
+          <div id="docs-quickstart" class="docs-section">
+            <div class="doc-section-title">⚡ Démarrage rapide</div>
+            <div class="doc-section-desc">Configurez et utilisez votre proxy en moins de 2 minutes.</div>
+
+            <div class="doc-alert info">
+              <span>ℹ️</span>
+              <div>Le proxy démarre automatiquement. Même sans clé configurée, les modèles Ollama locaux sont disponibles comme fallback.</div>
+            </div>
+
+            <div class="doc-block">
+              <div class="doc-block-header"><span class="doc-block-title">Étapes de configuration</span></div>
+              <div class="doc-block-body">
+                <div class="doc-step">
+                  <div class="doc-step-num">1</div>
+                  <div>
+                    <div class="doc-step-title">Copier l'URL de base</div>
+                    <div class="doc-step-desc">Utilisez <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">http://localhost:47822/v1</code> comme base URL dans votre application. La clé API est <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">rotator</code>.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num">2</div>
+                  <div>
+                    <div class="doc-step-title">Ajouter vos clés API</div>
+                    <div class="doc-step-desc">Rendez-vous dans <strong>Mes clés API</strong> et ajoutez vos clés pour chaque provider. Testez-les avant de sauvegarder pour valider qu'elles fonctionnent.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num">3</div>
+                  <div>
+                    <div class="doc-step-title">Choisir votre modèle</div>
+                    <div class="doc-step-desc">Utilisez un nom de profil (<code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">coding</code>, <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">chat</code>, <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">reasoning</code>…) comme modèle dans votre application. Le proxy sélectionne automatiquement le meilleur disponible.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num">4</div>
+                  <div>
+                    <div class="doc-step-title">Vérifier l'état</div>
+                    <div class="doc-step-desc">La Vue d'ensemble affiche les providers actifs, quotas consommés et dernières requêtes en temps réel.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="doc-codeblock">
+              <div class="doc-codeblock-header">
+                <span class="doc-codeblock-lang">Python (openai SDK)</span>
+                <button onclick="copyText(document.getElementById('code-python').innerText, this)" style="font-size:10.5px; padding:4px 8px">📋 Copier</button>
+              </div>
+              <pre id="code-python">from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:47822/v1",
+    api_key="rotator"
+)
+
+response = client.chat.completions.create(
+    model="coding",   # ou "chat", "reasoning", "vision"...
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response.choices[0].message.content)</pre>
+            </div>
+
+            <div class="doc-codeblock">
+              <div class="doc-codeblock-header">
+                <span class="doc-codeblock-lang">Node.js / TypeScript</span>
+                <button onclick="copyText(document.getElementById('code-node').innerText, this)" style="font-size:10.5px; padding:4px 8px">📋 Copier</button>
+              </div>
+              <pre id="code-node">import OpenAI from 'openai';
+
+const client = new OpenAI({
+  baseURL: 'http://localhost:47822/v1',
+  apiKey: 'rotator',
+});
+
+const response = await client.chat.completions.create({
+  model: 'chat',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});</pre>
+            </div>
+
+            <div class="doc-codeblock">
+              <div class="doc-codeblock-header">
+                <span class="doc-codeblock-lang">cURL</span>
+                <button onclick="copyText(document.getElementById('code-curl').innerText, this)" style="font-size:10.5px; padding:4px 8px">📋 Copier</button>
+              </div>
+              <pre id="code-curl">curl http://localhost:47822/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer rotator" \
+  -d '{
+    "model": "coding",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</pre>
+            </div>
+          </div>
+
+          <!-- ENDPOINTS -->
+          <div id="docs-endpoints" class="docs-section">
+            <div class="doc-section-title">🔌 Endpoints API</div>
+            <div class="doc-section-desc">Le proxy expose une API compatible OpenAI plus des endpoints de contrôle.</div>
+
+            <div class="doc-block" style="margin-bottom:14px">
+              <div class="doc-block-header"><span class="doc-block-title">Compatibilité OpenAI</span></div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/v1/chat/completions</span>
+                <span class="doc-ep-desc">Complétions de chat — compatible avec tout SDK OpenAI</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/v1/models</span>
+                <span class="doc-ep-desc">Liste des modèles et profils disponibles</span>
+              </div>
+              <!-- Note: embeddings are provider-specific; no dedicated proxy endpoint implemented -->
+            </div>
+
+            <div class="doc-block" style="margin-bottom:14px">
+              <div class="doc-block-header"><span class="doc-block-title">Contrôle du proxy</span></div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/api/status</span>
+                <span class="doc-ep-desc">État global — uptime, providers actifs, mode</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/api/logs</span>
+                <span class="doc-ep-desc">Journal d'activité des requêtes</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/api/stats</span>
+                <span class="doc-ep-desc">Statistiques d'utilisation (<code style="font-size:11px; font-family:var(--font-mono)">?period=today|week|month</code>)</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/suspend</span>
+                <span class="doc-ep-desc">Suspendre un provider temporairement</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/resume</span>
+                <span class="doc-ep-desc">Réactiver un provider ou reprendre après pause</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/lock</span>
+                <span class="doc-ep-desc">Verrouiller un profil sur un modèle spécifique</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method del">DEL</span>
+                <span class="doc-path">/api/lock/{profile}</span>
+                <span class="doc-ep-desc">Déverrouiller un profil</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/reload-config</span>
+                <span class="doc-ep-desc">Recharger la configuration sans redémarrer</span>
+              </div>
+            </div>
+
+            <div class="doc-block">
+              <div class="doc-block-header"><span class="doc-block-title">Configuration & Clés</span></div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/api/config</span>
+                <span class="doc-ep-desc">Lire le fichier config.yaml</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/config</span>
+                <span class="doc-ep-desc">Écrire et recharger la configuration</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method get">GET</span>
+                <span class="doc-path">/api/config/keys</span>
+                <span class="doc-ep-desc">Lire les clés API configurées</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/config/keys</span>
+                <span class="doc-ep-desc">Enregistrer les clés API</span>
+              </div>
+              <div class="doc-endpoint">
+                <span class="doc-method post">POST</span>
+                <span class="doc-path">/api/config/keys/test</span>
+                <span class="doc-ep-desc">Tester une clé API avant de la sauvegarder</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROVIDERS -->
+          <div id="docs-providers" class="docs-section">
+            <div class="doc-section-title">🔀 Providers</div>
+            <div class="doc-section-desc">Chaque provider est un fournisseur de modèles avec ses propres clés et quotas.</div>
+
+            <div class="doc-alert warning">
+              <span>⚠️</span>
+              <div>La rotation des clés est automatique. Chaque clé est utilisée à tour de rôle pour maximiser les quotas disponibles. Si une clé est épuisée, la suivante est utilisée sans interruption.</div>
+            </div>
+
+            <div class="doc-block">
+              <div class="doc-block-header"><span class="doc-block-title">Comportement de rotation</span></div>
+              <div class="doc-block-body">
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div>
+                  <div>
+                    <div class="doc-step-title">Ordre de priorité</div>
+                    <div class="doc-step-desc">Par défaut : Google → NVIDIA → OpenRouter → Ollama Cloud → Local. Modifiable via les presets.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div>
+                  <div>
+                    <div class="doc-step-title">Suspension automatique</div>
+                    <div class="doc-step-desc">Un provider qui retourne des erreurs 429 (quota) est automatiquement suspendu et exclu du routage pendant 1h.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div>
+                  <div>
+                    <div class="doc-step-title">Réactivation automatique</div>
+                    <div class="doc-step-desc">Un provider suspendu est automatiquement retesté et réactivé après la période de suspension.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <table class="doc-table" style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;display:table">
+              <thead><tr><th>Identifiant</th><th>RPM max</th><th>Clés multiples</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td class="mono-cell">google</td><td class="mono-cell">60</td><td><span class="badge green" style="font-size:10px">✓ Oui</span></td><td class="dim-cell">Nécessite clé Gemini API</td></tr>
+                <tr><td class="mono-cell">nvidia</td><td class="mono-cell">40</td><td><span class="badge green" style="font-size:10px">✓ Oui</span></td><td class="dim-cell">Accès à tout le catalogue NIM</td></tr>
+                <tr><td class="mono-cell">openrouter</td><td class="mono-cell">20</td><td><span class="badge green" style="font-size:10px">✓ Oui</span></td><td class="dim-cell">Modèles gratuits disponibles</td></tr>
+                <tr><td class="mono-cell">ollama_cloud</td><td class="mono-cell">30</td><td><span class="badge green" style="font-size:10px">✓ Oui</span></td><td class="dim-cell">Généreux, modèles larges</td></tr>
+                <tr><td class="mono-cell">local</td><td class="mono-cell">∞</td><td><span class="badge" style="font-size:10px">N/A</span></td><td class="dim-cell">Aucune clé — Ollama local</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- PROFILES -->
+          <div id="docs-profiles" class="docs-section">
+            <div class="doc-section-title">🧩 Profils de routage</div>
+            <div class="doc-section-desc">Utilisez le nom d'un profil comme <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 6px;border-radius:3px">model</code> dans vos requêtes. Le proxy choisit automatiquement le meilleur modèle disponible pour ce profil.</div>
+
+            <table class="doc-table" style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;display:table;margin-bottom:14px">
+              <thead><tr><th>Profil</th><th>Cas d'usage</th><th>Modèles préférés</th></tr></thead>
+              <tbody>
+                <tr><td><span style="font-size:14px">💻</span> <span class="mono-cell">coding</span></td><td class="dim-cell">Génération et révision de code</td><td class="mono-cell">codestral, deepseek-coder, llama-3.1-70b</td></tr>
+                <tr><td><span style="font-size:14px">🧠</span> <span class="mono-cell">reasoning</span></td><td class="dim-cell">Raisonnement logique, maths, analyse</td><td class="mono-cell">gemini-pro, llama-3.1-405b</td></tr>
+                <tr><td><span style="font-size:14px">💬</span> <span class="mono-cell">chat</span></td><td class="dim-cell">Conversation générale</td><td class="mono-cell">gemini-flash, llama-3.1-8b</td></tr>
+                <tr><td><span style="font-size:14px">📄</span> <span class="mono-cell">long</span></td><td class="dim-cell">Contexte long, documents, résumés</td><td class="mono-cell">gemini-flash (1M ctx), claude-haiku</td></tr>
+                <tr><td><span style="font-size:14px">👁️</span> <span class="mono-cell">vision</span></td><td class="dim-cell">Analyse d'images</td><td class="mono-cell">gemini-flash-vision, llava</td></tr>
+                <tr><td><span style="font-size:14px">🎵</span> <span class="mono-cell">audio</span></td><td class="dim-cell">Transcription, audio</td><td class="mono-cell">whisper</td></tr>
+                <tr><td><span style="font-size:14px">🌍</span> <span class="mono-cell">translate</span></td><td class="dim-cell">Traduction multi-langue</td><td class="mono-cell">gemini-flash, mistral</td></tr>
+              </tbody>
+            </table>
+
+            <div class="doc-alert success">
+              <span>💡</span>
+              <div>Vous pouvez aussi utiliser un nom de modèle exact (<code style="font-family:var(--font-mono);font-size:11px">gpt-4o</code>, <code style="font-family:var(--font-mono);font-size:11px">llama3.1</code>…). Si le modèle est disponible chez un provider configuré, il sera utilisé directement.</div>
+            </div>
+          </div>
+
+          <!-- KEYS -->
+          <div id="docs-keys" class="docs-section">
+            <div class="doc-section-title">🔑 Gestion des clés API</div>
+            <div class="doc-section-desc">Stratégies pour maximiser vos quotas gratuits en multipliant les clés.</div>
+
+            <div class="doc-alert danger">
+              <span>🔐</span>
+              <div>Les clés sont stockées en clair dans <code style="font-family:var(--font-mono);font-size:11px">config.yaml</code>. Ne commitez jamais ce fichier dans un dépôt public et ne partagez pas de captures d'écran de la section Configuration.</div>
+            </div>
+
+            <div class="doc-block" style="margin-bottom:14px">
+              <div class="doc-block-header"><span class="doc-block-title">Maximiser les quotas gratuits</span></div>
+              <div class="doc-block-body">
+                <div class="doc-step">
+                  <div class="doc-step-num">1</div>
+                  <div>
+                    <div class="doc-step-title">Plusieurs comptes Google</div>
+                    <div class="doc-step-desc">Créez plusieurs comptes Google et générez une clé Gemini API pour chacun. Chaque clé offre 14 400 requêtes/jour. 3 clés = 43 200 req/jour.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num">2</div>
+                  <div>
+                    <div class="doc-step-title">Multi-clés NVIDIA</div>
+                    <div class="doc-step-desc">NVIDIA offre un crédit gratuit généreux à chaque nouveau compte. Créez plusieurs comptes avec différentes adresses email.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num">3</div>
+                  <div>
+                    <div class="doc-step-title">Tester avant de sauvegarder</div>
+                    <div class="doc-step-desc">Utilisez le bouton 🧪 sur chaque clé avant de sauvegarder. Les clés invalides sont refusées pour éviter des erreurs en production.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROJECTS -->
+          <div id="docs-projects" class="docs-section">
+            <div class="doc-section-title">🧷 Projets & tokens</div>
+            <div class="doc-section-desc">Isolez les quotas et les logs par application ou utilisateur via des tokens de projet.</div>
+
+            <div class="doc-block" style="margin-bottom:14px">
+              <div class="doc-block-header"><span class="doc-block-title">Fonctionnement</span></div>
+              <div class="doc-block-body">
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--blue-dim);border-color:var(--blue-bdr);color:var(--blue)">→</div>
+                  <div>
+                    <div class="doc-step-title">Un token par projet</div>
+                    <div class="doc-step-desc">Chaque projet reçoit un token unique. Utilisez ce token comme clé API dans votre application au lieu de <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">rotator</code>.</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--blue-dim);border-color:var(--blue-bdr);color:var(--blue)">→</div>
+                  <div>
+                    <div class="doc-step-title">Politiques d'accès</div>
+                    <div class="doc-step-desc"><code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">full_access</code> : accès complet. <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">coding_only</code> : uniquement le profil coding (idéal pour Claude Code).</div>
+                  </div>
+                </div>
+                <div class="doc-step">
+                  <div class="doc-step-num" style="background:var(--blue-dim);border-color:var(--blue-bdr);color:var(--blue)">→</div>
+                  <div>
+                    <div class="doc-step-title">Modes de quota</div>
+                    <div class="doc-step-desc"><code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">hard_block</code> : erreur 429 au-delà du quota. <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">local_only</code> : bascule sur Ollama local. <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">alert_only</code> : continue mais alerte.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCHEDULING -->
+          <div id="docs-scheduling" class="docs-section">
+            <div class="doc-section-title">🕐 Planification</div>
+            <div class="doc-section-desc">Automatisez des changements de comportement à des horaires précis.</div>
+
+            <div class="doc-block">
+              <div class="doc-block-header"><span class="doc-block-title">Actions disponibles</span></div>
+              <table class="doc-table">
+                <thead><tr><th>Action</th><th>Cible</th><th>Effet</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono-cell">block</td><td class="mono-cell">provider_id</td><td class="dim-cell">Suspend un provider pendant la plage horaire</td></tr>
+                  <tr><td class="mono-cell">force</td><td class="mono-cell">profile:provider</td><td class="dim-cell">Force un profil vers un provider spécifique</td></tr>
+                  <tr><td class="mono-cell">switch_preset</td><td class="mono-cell">preset_name</td><td class="dim-cell">Active un preset pendant la plage horaire</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="doc-codeblock" style="margin-top:14px">
+              <div class="doc-codeblock-header"><span class="doc-codeblock-lang">Exemple — mode nuit économique</span></div>
+              <pre>Nom    : Nuit économique
+Action : block
+Cible  : nvidia
+Début  : 22:00
+Fin    : 07:00
+Jours  : all</pre>
+            </div>
+          </div>
+
+          <!-- SECURITY -->
+          <div id="docs-security" class="docs-section">
+            <div class="doc-section-title">🔐 Sécurité</div>
+            <div class="doc-section-desc">Bonnes pratiques pour utiliser API Rotator en toute sécurité.</div>
+
+            <div class="doc-alert danger" style="margin-bottom:16px">
+              <span>🚨</span>
+              <div><strong>Règle absolue :</strong> Ne versionnez jamais <code style="font-family:var(--font-mono);font-size:11px">config.yaml</code> avec des clés réelles. Ajoutez-le à votre <code style="font-family:var(--font-mono);font-size:11px">.gitignore</code>.</div>
+            </div>
+
+            <div class="doc-block">
+              <div class="doc-block-header"><span class="doc-block-title">Liste de contrôle sécurité</span></div>
+              <div class="doc-block-body">
+                <div class="doc-step"><div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div><div><div class="doc-step-title">config.yaml dans .gitignore</div><div class="doc-step-desc">Ajoutez <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">config.yaml</code> et <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">*.yaml</code> à votre .gitignore.</div></div></div>
+                <div class="doc-step"><div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div><div><div class="doc-step-title">Proxy local uniquement</div><div class="doc-step-desc">N'exposez jamais le port 47822 sur internet. Il est conçu pour un usage local uniquement.</div></div></div>
+                <div class="doc-step"><div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div><div><div class="doc-step-title">Tokens de projet pour partage</div><div class="doc-step-desc">Si vous partagez l'accès, créez un token de projet avec une politique restrictive plutôt que de partager la clé <code style="font-family:var(--font-mono);background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:11px">rotator</code>.</div></div></div>
+                <div class="doc-step"><div class="doc-step-num" style="background:var(--green-dim);border-color:var(--green-bdr);color:var(--green)">✓</div><div><div class="doc-step-title">Révoquer les clés compromises</div><div class="doc-step-desc">En cas de fuite, révoquez immédiatement la clé chez le provider (Google AI Studio, NVIDIA…) puis mettez-la à jour dans le proxy.</div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TROUBLESHOOTING -->
+          <div id="docs-troubleshooting" class="docs-section">
+            <div class="doc-section-title">🛠 Dépannage</div>
+            <div class="doc-section-desc">Solutions aux problèmes les plus courants.</div>
+
+            <div class="doc-block" style="margin-bottom:14px">
+              <div class="doc-block-header"><span class="doc-block-title">Erreurs fréquentes</span></div>
+              <table class="doc-table">
+                <thead><tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="mono-cell">Connection refused</td>
+                    <td class="dim-cell">Le proxy ne tourne pas</td>
+                    <td class="dim-cell">Vérifiez que le processus est lancé. Redémarrez-le.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono-cell">401 Unauthorized</td>
+                    <td class="dim-cell">Clé API mal configurée</td>
+                    <td class="dim-cell">Testez la clé dans l'onglet Tests & Benchmark.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono-cell">429 Too Many Requests</td>
+                    <td class="dim-cell">Quota épuisé</td>
+                    <td class="dim-cell">Ajoutez plus de clés ou attendez le reset (minuit UTC pour Google).</td>
+                  </tr>
+                  <tr>
+                    <td class="mono-cell">Modèle non trouvé</td>
+                    <td class="dim-cell">Nom de profil incorrect</td>
+                    <td class="dim-cell">Consultez <code style="font-family:var(--font-mono);font-size:11px">/v1/models</code> pour la liste exacte.</td>
+                  </tr>
+                  <tr>
+                    <td class="mono-cell">Ollama non détecté</td>
+                    <td class="dim-cell">Ollama non installé/démarré</td>
+                    <td class="dim-cell">Installez Ollama depuis la Vue d'ensemble ou démarrez-le manuellement.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="doc-alert info">
+              <span>💡</span>
+              <div>Consultez le <strong>Journal d'activité</strong> pour voir les erreurs détaillées par requête, avec provider et modèle utilisés.</div>
+            </div>
+          </div>
+
+          <!-- README RAW -->
+          <div id="docs-readme" class="docs-section">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
+              <div>
+                <div class="doc-section-title">📄 README brut</div>
+                <div class="doc-section-desc">Contenu du fichier README.md du projet</div>
+              </div>
+              <button onclick="loadReadme(true)">↺ Recharger</button>
+            </div>
+            <pre id="readmeContent" class="doc-readme-raw">Chargement du README...</pre>
+          </div>
+
+        </div><!-- /docs-content -->
+      </div><!-- /docs-layout -->
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ══════════════════════════════════
+     MODAL: SKILLS STORE
+══════════════════════════════════ -->
+<div class="modal" id="ccSkillsModal">
+  <div class="modal-box" style="width:min(920px,96vw); max-height:88vh">
+    <div class="modal-header">
+      <div class="modal-title">🧩 Skills Store</div>
+      <div style="display:flex; align-items:center; gap:8px">
+        <button onclick="ccSelectAllSkills()" class="ghost" style="font-size:11px" title="Tout cocher">Tout</button>
+        <button onclick="ccSelectNoneSkills()" class="ghost" style="font-size:11px" title="Tout decocher">Rien</button>
+        <button onclick="ccSelectDefaultsOnly()" class="ghost" style="font-size:11px" title="Uniquement les defauts">Defauts</button>
+        <button class="ghost" onclick="ccCloseSkillsModal()">✕</button>
+      </div>
+    </div>
+    <div id="ccSkillsStoreBody">
+      <!-- Rendered dynamically by ccRenderSkillsStore() -->
+    </div>
+    <div class="skills-action-bar">
+      <div class="skills-sel-summary" id="ccSkillsSummary"><b>6</b> skill(s) sur 38</div>
+      <div style="display:flex; gap:8px">
+        <button onclick="ccApplySkillsSelection()">Valider</button>
+        <button onclick="ccStandaloneInstall()" class="primary" style="font-size:12px">⬇ Installer maintenant</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL: MODEL CHOICE
+══════════════════════════════════ -->
+<div class="modal" id="ccModelModal">
+  <div class="modal-box" style="width:min(520px,90vw)">
+    <div class="modal-header">
+      <div class="modal-title">🧠 Choix du modèle</div>
+      <button class="ghost" onclick="ccCloseModelModal()">✕</button>
+    </div>
+    <div style="font-size:12.5px; color:var(--text-dim); line-height:1.6; margin-bottom:16px">
+      <strong style="color:#fff">coding</strong> = profil recommandé. Le rotator choisit automatiquement le meilleur modèle disponible parmi tous vos providers, ce qui maximise vos quotas.
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px">
+      <button class="primary" onclick="ccPickModel('coding')" style="padding:12px 16px; font-size:13px">
+        ✅ Utiliser <strong>coding</strong> — rotation auto (recommandé)
+      </button>
+      <div style="text-align:center; font-size:11px; color:var(--text-dim)">— ou —</div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <select id="ccModelModalSelect" style="flex:1"><option value="">Chargement...</option></select>
+        <button onclick="ccPickModel(document.getElementById('ccModelModalSelect').value)" style="white-space:nowrap">▶ Utiliser ce modèle</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-dim)">
+        Consultez <a href="#" onclick="event.preventDefault();ccCloseModelModal();showCCTab('browse')" style="color:var(--accent)">📋 Modèles disponibles</a> pour voir la liste complète.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRMATION MODAL (réutilisable) -->
+<div class="modal" id="confirmModal">
+  <div class="modal-box" style="width:min(520px,90vw)">
+    <div class="modal-header">
+      <div class="modal-title" id="confirmModalTitle">Confirmer</div>
+      <button class="ghost" onclick="closeConfirmModal()">✕</button>
+    </div>
+    <div id="confirmModalBody" style="font-size:13px; color:var(--text-dim); margin-top:8px; white-space:pre-wrap"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px">
+      <button onclick="closeConfirmModal()">Annuler</button>
+      <button id="confirmModalOkBtn" class="danger">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="lockModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="lockTitle">Verrouiller un modèle</div>
+      <button class="ghost" onclick="closeLockModal()">✕ Fermer</button>
+    </div>
+    <input id="lockSearch" placeholder="Rechercher un modèle..." style="width:100%; margin-bottom:12px" oninput="renderLockList()"/>
+    <div id="lockList" class="flex-col"></div>
+    <hr class="divider">
+    <button class="danger" onclick="unlockProfile()">🔓 Déverrouiller ce profil</button>
+  </div>
+</div>
+
+<!-- Model Detail Modal -->
+<div class="modal" id="modelDetailModal">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="modelDetailTitle">Détails du modèle</div>
+      <button class="ghost" onclick="closeModelDetail()">✕ Fermer</button>
+    </div>
+    <div id="modelDetailBody" style="max-height:70vh; overflow-y:auto; padding:4px 0"></div>
+  </div>
+</div>
+
+<script src="/static/js/state.js"></script>
+<script src="/static/js/tabs.js"></script>
+<script src="/static/js/helpers.js"></script>
+<script src="/static/js/claude.js"></script>
+<script src="/static/js/keys.js"></script>
+<script src="/static/js/pages.js"></script>
+<script src="/static/js/init.js"></script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+{
+  "_comment": [
+    "╔══════════════════════════════════════════════════════════════════════╗",
+    "║           SKILLS.JSON — Catalogue centralisé des Skills            ║",
+    "╚══════════════════════════════════════════════════════════════════════╝",
+    "",
+    "Ce fichier est la source unique (single source of truth) pour toutes",
+    "les skills affichées sur le dashboard et installées par connect_claude.",
+    "",
+    "AJOUTER UNE NOUVELLE SKILL :",
+    "  1. Copier le modèle ci-dessous (template)",
+    "  2. Le coller dans la section appropriée (defaults, packs, individual)",
+    "  3. Remplir les champs, enregistrer → tout s'affiche automatiquement",
+    "",
+    "TEMPLATE SKILL INDIVIDUELLE :",
+    "  {",
+    "    \"id\": \"mon-skill-id\",",
+    "    \"name\": \"Nom affiché sur le dashboard\",",
+    "    \"description\": \"Description courte\",",
+    "    \"icon\": \"🔧\",",
+    "    \"repo\": \"github-user/repo-name\",",
+    "    \"repo_url\": \"https://github.com/github-user/repo-name\",",
+    "    \"author\": \"github-user\",",
+    "    \"installs\": \"12.5K\",",
+    "    \"tags\": [\"backend\", \"typescript\"],",
+    "    \"agents\": [\"Claude Code\", \"Cursor\", \"GitHub Copilot\"],",
+    "    \"risk_level\": \"safe\",",
+    "    \"enabled\": true",
+    "  }",
+    "",
+    "TEMPLATE PACK (groupe de skills) :",
+    "  {",
+    "    \"id\": \"mon-pack\",",
+    "    \"name\": \"Mon Pack\",",
+    "    \"description\": \"Description du pack\",",
+    "    \"icon\": \"📦\",",
+    "    \"skills\": [",
+    "      { \"id\": \"skill-a\", \"repo\": \"user/repo\" },",
+    "      { \"id\": \"skill-b\", \"repo\": \"user/repo\" }",
+    "    ]",
+    "  }",
+    "",
+    "ICÔNES DISPONIBLES (champ 'icon') :",
+    "  Recherche/Découverte : 🔍 🔎 🧭 🗺️",
+    "  Code/Dev            : 💻 🔧 ⚙️ 🛠️ 🔩 🧰 📐",
+    "  Frameworks          : ⚛️ 🚀 ▲ 🌐 📦",
+    "  Tests/Debug         : 🐛 🧪 🧬 ✅ 🎯 🔬",
+    "  IA/Agents           : 🧠 🤖 ⚡ 🔌 🪄",
+    "  Documents           : 📄 📑 📊 📈 📉 📋",
+    "  Design/UI           : 🎨 💎 🖌️ 🎭 💅 💠",
+    "  Marketing           : 📈 📣 📢 💰 🏷️ 🎪",
+    "  Mobile              : 📱 📲 🍎 🤖",
+    "  Vidéo/Média         : 🎬 🎥 📹 🎞️ 🎵 🎤",
+    "  Sécurité            : 🔒 🛡️ ⚠️ 🚫",
+    "  Organisation        : 📝 📋 🗂️ 🏗️ 📅",
+    "  Communication       : 💬 📧 🗣️ 📨",
+    "",
+    "NIVEAUX DE RISQUE (champ 'risk_level') :",
+    "  \"safe\"     — Aucun problème détecté",
+    "  \"low\"      — Risque faible",
+    "  \"medium\"   — Risque moyen, vérifier avant usage",
+    "  \"high\"     — Risque élevé, non recommandé",
+    "  \"blocked\"  — Bloqué (voir champ 'excluded')",
+    "",
+    "TAGS DISPONIBLES (champ 'tags') :",
+    "  frontend, backend, fullstack, mobile, devops, testing,",
+    "  typescript, react, nextjs, vue, svelte, tailwind,",
+    "  nodejs, python, api, database, auth, payments,",
+    "  ai, agents, workflow, automation, planning,",
+    "  design, ui, ux, css, accessibility,",
+    "  marketing, seo, copywriting, cro, analytics,",
+    "  documents, pdf, office, media, video,",
+    "  security, debugging, performance, monitoring,",
+    "  ios, android, react-native, flutter, swiftui,",
+    "  supabase, stripe, remotion, vitest, playwright",
+    ""
+  ],
+
+  "defaults": [
+    {
+      "id": "find-skills",
+      "name": "Découverte de skills",
+      "description": "Aide à découvrir et installer de nouvelles skills pour vos agents",
+      "icon": "🔍",
+      "repo": "vercel-labs/skills",
+      "repo_url": "https://github.com/vercel-labs/skills",
+      "author": "vercel-labs",
+      "installs": "45K",
+      "tags": ["ai", "agents", "automation"],
+      "agents": ["Claude Code", "Cursor", "GitHub Copilot", "Gemini CLI"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "vercel-react-best-practices",
+      "name": "React / Next.js Perf",
+      "description": "Best practices React et optimisations de performance Next.js",
+      "icon": "⚛️",
+      "repo": "vercel-labs/agent-skills",
+      "repo_url": "https://github.com/vercel-labs/agent-skills",
+      "author": "vercel-labs",
+      "installs": "38K",
+      "tags": ["frontend", "react", "nextjs", "performance"],
+      "agents": ["Claude Code", "Cursor"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "web-design-guidelines",
+      "name": "Guidelines Web",
+      "description": "Standards et guidelines de design web moderne",
+      "icon": "🌐",
+      "repo": "vercel-labs/agent-skills",
+      "repo_url": "https://github.com/vercel-labs/agent-skills",
+      "author": "vercel-labs",
+      "installs": "22K",
+      "tags": ["design", "ui", "ux", "css", "frontend"],
+      "agents": ["Claude Code", "Cursor"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "brainstorming",
+      "name": "Brainstorming",
+      "description": "Techniques de brainstorming structuré et créativité assistée",
+      "icon": "💡",
+      "repo": "obra/superpowers",
+      "repo_url": "https://github.com/obra/superpowers",
+      "author": "obra",
+      "installs": "18K",
+      "tags": ["ai", "workflow", "planning"],
+      "agents": ["Claude Code"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "systematic-debugging",
+      "name": "Débogage systématique",
+      "description": "Approche méthodique et structurée pour le débogage de code",
+      "icon": "🐛",
+      "repo": "obra/superpowers",
+      "repo_url": "https://github.com/obra/superpowers",
+      "author": "obra",
+      "installs": "15K",
+      "tags": ["debugging", "testing", "workflow"],
+      "agents": ["Claude Code"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "next-best-practices",
+      "name": "Next.js App Router",
+      "description": "Best practices Next.js App Router, RSC, layouts et routing",
+      "icon": "🚀",
+      "repo": "vercel-labs/next-skills",
+      "repo_url": "https://github.com/vercel-labs/next-skills",
+      "author": "vercel-labs",
+      "installs": "29K",
+      "tags": ["frontend", "nextjs", "react", "fullstack"],
+      "agents": ["Claude Code", "Cursor"],
+      "risk_level": "safe",
+      "enabled": true
+    }
+  ],
+
+  "packs": [
+    {
+      "id": "documents",
+      "name": "Pack Documents",
+      "description": "Générer et manipuler des fichiers Office et PDF",
+      "icon": "📄",
+      "skills": [
+        { "id": "pdf",  "repo": "anthropics/skills", "repo_url": "https://github.com/anthropics/skills" },
+        { "id": "docx", "repo": "anthropics/skills", "repo_url": "https://github.com/anthropics/skills" },
+        { "id": "pptx", "repo": "anthropics/skills", "repo_url": "https://github.com/anthropics/skills" },
+        { "id": "xlsx", "repo": "anthropics/skills", "repo_url": "https://github.com/anthropics/skills" }
+      ]
+    },
+    {
+      "id": "workflow",
+      "name": "Pack Workflow Agentique",
+      "description": "Planification, code review, agents parallèles",
+      "icon": "🧠",
+      "skills": [
+        { "id": "writing-plans",                  "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" },
+        { "id": "executing-plans",                "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" },
+        { "id": "requesting-code-review",         "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" },
+        { "id": "verification-before-completion", "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" },
+        { "id": "subagent-driven-development",    "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" },
+        { "id": "dispatching-parallel-agents",    "repo": "obra/superpowers", "repo_url": "https://github.com/obra/superpowers" }
+      ]
+    },
+    {
+      "id": "marketing",
+      "name": "Pack Marketing & CRO",
+      "description": "SEO, copywriting, conversion, stratégie de contenu",
+      "icon": "📈",
+      "skills": [
+        { "id": "seo-audit",            "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "copywriting",          "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "marketing-psychology", "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "content-strategy",     "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "social-content",       "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "copy-editing",         "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "onboarding-cro",       "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "signup-flow-cro",      "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" },
+        { "id": "paywall-upgrade-cro",  "repo": "coreyhaines31/marketingskills", "repo_url": "https://github.com/coreyhaines31/marketingskills" }
+      ]
+    },
+    {
+      "id": "backend",
+      "name": "Pack Backend & DevOps",
+      "description": "Node.js, API, TypeScript avancé, tests, CI/CD",
+      "icon": "⚙️",
+      "skills": [
+        { "id": "typescript-advanced-types",        "repo": "wshobson/agents",          "repo_url": "https://github.com/wshobson/agents" },
+        { "id": "nodejs-backend-patterns",          "repo": "wshobson/agents",          "repo_url": "https://github.com/wshobson/agents" },
+        { "id": "api-design-principles",            "repo": "wshobson/agents",          "repo_url": "https://github.com/wshobson/agents" },
+        { "id": "vitest",                           "repo": "antfu/skills",             "repo_url": "https://github.com/antfu/skills" },
+        { "id": "better-auth-best-practices",       "repo": "better-auth/skills",       "repo_url": "https://github.com/better-auth/skills" },
+        { "id": "supabase-postgres-best-practices", "repo": "supabase/agent-skills",    "repo_url": "https://github.com/supabase/agent-skills" },
+        { "id": "stripe-integration",               "repo": "wshobson/agents",          "repo_url": "https://github.com/wshobson/agents" }
+      ]
+    },
+    {
+      "id": "mobile",
+      "name": "Pack Mobile",
+      "description": "React Native, Expo, SwiftUI, Flutter",
+      "icon": "📱",
+      "skills": [
+        { "id": "building-native-ui",          "repo": "expo/skills",                       "repo_url": "https://github.com/expo/skills" },
+        { "id": "react-native-best-practices", "repo": "callstackincubator/agent-skills",   "repo_url": "https://github.com/callstackincubator/agent-skills" },
+        { "id": "flutter-animations",          "repo": "madteacher/mad-agents-skills",      "repo_url": "https://github.com/madteacher/mad-agents-skills" },
+        { "id": "swiftui-expert-skill",        "repo": "avdlee/swiftui-agent-skill",        "repo_url": "https://github.com/avdlee/swiftui-agent-skill" }
+      ]
+    },
+    {
+      "id": "remotion",
+      "name": "Pack Remotion",
+      "description": "Vidéo programmatique, animations, captions",
+      "icon": "🎬",
+      "skills": [
+        { "id": "remotion-best-practices", "repo": "remotion-dev/skills", "repo_url": "https://github.com/remotion-dev/skills" }
+      ]
+    }
+  ],
+
+  "individual": [
+    {
+      "id": "test-driven-development",
+      "name": "Test-Driven Development",
+      "description": "Méthodologie TDD complète avec cycles red-green-refactor",
+      "icon": "🧪",
+      "repo": "obra/superpowers",
+      "repo_url": "https://github.com/obra/superpowers",
+      "author": "obra",
+      "installs": "11.1K",
+      "tags": ["testing", "workflow", "backend"],
+      "agents": ["Claude Code"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "webapp-testing",
+      "name": "Tests Playwright",
+      "description": "Tests end-to-end avec Playwright pour applications web",
+      "icon": "🎭",
+      "repo": "anthropics/skills",
+      "repo_url": "https://github.com/anthropics/skills",
+      "author": "anthropics",
+      "installs": "12K",
+      "tags": ["testing", "frontend", "playwright"],
+      "agents": ["Claude Code"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "tailwind-design-system",
+      "name": "Tailwind CSS v4",
+      "description": "Design system complet avec Tailwind CSS v4 et best practices",
+      "icon": "💨",
+      "repo": "wshobson/agents",
+      "repo_url": "https://github.com/wshobson/agents",
+      "author": "wshobson",
+      "installs": "8.9K",
+      "tags": ["design", "css", "tailwind", "frontend"],
+      "agents": ["Claude Code", "Cursor"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "name": "UI/UX Pro Max",
+      "description": "Expertise UI/UX avancée, accessibilité, patterns de design",
+      "icon": "🎨",
+      "repo": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "repo_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "author": "nextlevelbuilder",
+      "installs": "31.6K",
+      "tags": ["design", "ui", "ux", "accessibility"],
+      "agents": ["Claude Code", "Cursor", "GitHub Copilot"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "mcp-builder",
+      "name": "Serveurs MCP",
+      "description": "Construire des serveurs MCP (Model Context Protocol)",
+      "icon": "🔌",
+      "repo": "anthropics/skills",
+      "repo_url": "https://github.com/anthropics/skills",
+      "author": "anthropics",
+      "installs": "10.7K",
+      "tags": ["ai", "agents", "backend", "api"],
+      "agents": ["Claude Code"],
+      "risk_level": "safe",
+      "enabled": true
+    },
+    {
+      "id": "skill-creator",
+      "name": "Créer ses skills",
+      "description": "Créer et publier vos propres skills pour agents IA",
+      "icon": "🛠️",
+      "repo": "anthropics/skills",
+      "repo_url": "https://github.com/anthropics/skills",
+      "author": "anthropics",
+      "installs": "40.3K",
+      "tags": ["ai", "agents", "automation"],
+      "agents": ["Claude Code", "Cursor", "GitHub Copilot"],
+      "risk_level": "safe",
+      "enabled": true
+    }
+  ],
+
+  "excluded": [
+    {
+      "id": "browser-use",
+      "reason": "3/3 audits sécurité échoués",
+      "risk_level": "high",
+      "repo": "browser-use/skills",
+      "repo_url": "https://github.com/browser-use/skills"
+    },
+    {
+      "id": "agent-browser",
+      "reason": "Pas de SKILL.md",
+      "risk_level": "blocked",
+      "repo": "agent-browser/skills",
+      "repo_url": ""
+    },
+    {
+      "id": "vercel-react-native-skills",
+      "reason": "Pas de SKILL.md",
+      "risk_level": "blocked",
+      "repo": "vercel-labs/react-native-skills",
+      "repo_url": ""
+    }
+  ]
+}
