@@ -192,7 +192,94 @@ Le proxy expose `/v1/messages` (API Anthropic) et `/v1/chat/completions` (API Op
 
 ---
 
-## 6. Profils de routage
+## 6. Intégrations IDE & Apps
+
+Le rotator est compatible avec **tout programme** acceptant un endpoint OpenAI custom.
+
+### Configuration universelle
+
+```
+Base URL : http://localhost:47822/v1
+API Key  : rotator  (ou votre token projet)
+Model    : coding   (ou reasoning, chat, long, ou un modèle spécifique)
+```
+
+### Continue (VS Code / JetBrains)
+
+Extension recommandée pour le chat et l'autocomplétion dans l'éditeur.
+
+**Installation** : `Continue.continue` dans le Marketplace VS Code.
+
+**Config** (`~/.continue/config.yaml`) :
+
+```yaml
+name: Rotator Config
+version: 1.0.0
+schema: v1
+models:
+  - name: "Rotator Coding"
+    provider: openai
+    model: coding
+    apiBase: http://localhost:47822/v1
+    apiKey: rotator
+    roles: [chat, edit]
+
+  - name: "Rotator Reasoning"
+    provider: openai
+    model: reasoning
+    apiBase: http://localhost:47822/v1
+    apiKey: rotator
+    roles: [chat]
+
+tabAutocompleteModel:
+  name: "Rotator Autocomplete"
+  provider: openai
+  model: coding
+  apiBase: http://localhost:47822/v1
+  apiKey: rotator
+```
+
+### Cline (VS Code)
+
+Agent autonome similaire à Claude Code, dans un panneau VS Code.
+
+**Installation** : `saoudrizwan.claude-dev` dans le Marketplace.
+
+**Config** : Settings → API Provider → **OpenAI Compatible** → Base URL + API Key + Model.
+
+### Cursor
+
+Settings → Models → OpenAI API Key = `rotator`, Base URL Override = `http://localhost:47822/v1`.
+
+### Autres apps compatibles
+
+| App | Type | Config |
+|-----|------|--------|
+| **Open WebUI** | Web GUI (Docker) | Connections → OpenAI URL + Key |
+| **Chatbox** | App Desktop | OpenAI Compatible endpoint |
+| **TypingMind** | Web GUI | Custom API Endpoint |
+| **Lobe Chat** | Web GUI | OpenAI → Proxy URL |
+| **Jan** | App Desktop | OpenAI-compatible provider |
+| **Aider** | CLI coding | `--openai-api-base` + `--openai-api-key` |
+| **LangChain** | Lib Python | `ChatOpenAI(base_url=..., api_key=...)` |
+| **n8n / Dify** | Automation | OpenAI-compatible node |
+
+### SDK Python (test rapide)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:47822/v1", api_key="rotator")
+r = client.chat.completions.create(
+    model="coding",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(r.choices[0].message.content)
+```
+
+---
+
+## 7. Profils de routage
 
 | Profil | Usage |
 |--------|-------|
@@ -208,7 +295,7 @@ Si `--model` n'est pas précisé, le profil est détecté automatiquement depuis
 
 ---
 
-## 7. Dashboard Web
+## 8. Dashboard Web
 
 ```
 http://localhost:47822/dashboard
@@ -226,7 +313,7 @@ Fonctionnalités clés :
 
 ---
 
-## 8. Commandes CLI
+## 9. Commandes CLI
 
 ```powershell
 .\rotator.ps1 status                     # État du proxy
@@ -242,7 +329,7 @@ Fonctionnalités clés :
 
 ---
 
-## 9. API exposée
+## 10. API exposée
 
 > Source de vérité : `GET /openapi.json` et Swagger UI à `/docs` quand le serveur tourne.
 
@@ -338,7 +425,7 @@ Fonctionnalités clés :
 
 ---
 
-## 10. Dépannage
+## 11. Dépannage
 
 | Problème | Solution |
 |----------|----------|
@@ -353,7 +440,7 @@ Fonctionnalités clés :
 
 ---
 
-## 11. Sécurité
+## 12. Sécurité
 
 - Ne versionnez jamais un `config.yaml` contenant des clés réelles
 - Utilisez `env:VAR_NAME` dans le YAML + fichier `.env` local
@@ -363,7 +450,7 @@ Fonctionnalités clés :
 
 ---
 
-## 12. Auteur
+## 13. Auteur
 
 Créé et maintenu par **[Ivanor1st](https://github.com/Ivanor1st)**.
 
