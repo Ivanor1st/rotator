@@ -1,5 +1,7 @@
 # API Rotator — Guide d'utilisation
 
+> **Par [Ivanor1st](https://github.com/Ivanor1st)** — Licence MIT
+
 Proxy local compatible OpenAI / Anthropic qui choisit automatiquement le meilleur modèle selon le type de tâche (`coding`, `reasoning`, `chat`, `long`, `vision`, `audio`, `translate`) et effectue une rotation automatique des clés API en cas de quota atteint ou d'erreurs répétées.
 
 ---
@@ -355,3 +357,11 @@ Fonctionnalités clés :
 - Activez `require_auth_header: true` en production
 - La protection brute-force bloque les IPs après trop de tokens invalides
 - Statut sécurité : `GET /api/security/status`
+
+---
+
+## 12. Auteur
+
+Créé et maintenu par **[Ivanor1st](https://github.com/Ivanor1st)**.
+
+Contributions bienvenues — voir [CONTRIBUTING.md](CONTRIBUTING.md).

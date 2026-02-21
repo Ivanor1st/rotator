@@ -38,6 +38,10 @@ Instead, report it privately:
 
 We will acknowledge your report within **48 hours** and aim to release a fix within **7 days** for critical issues.
 
+## Maintainer
+
+This project is maintained by **[Ivanor1st](https://github.com/Ivanor1st)**.
+
 ## Disclosure Policy
 
 - We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure)

@@ -9,8 +9,8 @@ Thanks for your interest in contributing! Here's how to get started.
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/<your-org>/api-rotator.git
-cd api-rotator
+git clone https://github.com/Ivanor1st/rotator.git
+cd rotator
 ```
 
 ### 2. Create a virtual environment
