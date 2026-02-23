@@ -141,6 +141,28 @@ def model_context(model_name: str) -> str:
     return "?"
 
 
+def inject_custom_models(custom_models: list[dict[str, Any]]) -> None:
+    for custom in custom_models:
+        model_id = str(custom.get("id") or "").strip()
+        provider = str(custom.get("provider") or "").strip()
+        profile = str(custom.get("profile") or "chat").strip()
+        context = str(custom.get("context") or "?").strip()
+
+        if not model_id or not provider:
+            continue
+
+        if profile in ROUTING_CHAINS:
+            # Check if it's already there to avoid duplicates on reload
+            if not any(t.model == model_id and t.provider == provider for t in ROUTING_CHAINS[profile]):
+                ROUTING_CHAINS[profile].append(RouteTarget(provider, model_id, "custom"))
+
+        if provider not in MODEL_CATALOG:
+            MODEL_CATALOG[provider] = []
+            
+        if not any(m["model"] == model_id for m in MODEL_CATALOG[provider]):
+            MODEL_CATALOG[provider].append({"model": model_id, "context": context, "emoji": "✨"})
+
+
 def compute_suggestion(profile: str, current_model: str, stats: list[dict[str, Any]]) -> dict[str, Any] | None:
     if len(stats) < 2:
         return None

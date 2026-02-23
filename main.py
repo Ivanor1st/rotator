@@ -31,6 +31,7 @@ from router import (
     compute_suggestion,
     detect_profile,
     find_model_provider,
+    inject_custom_models,
     list_all_models,
     model_context,
     profile_emoji,
@@ -73,7 +74,6 @@ DEFAULT_COMPAT_ALIASES = {
     "gpt-5-mini": "coding",
 }
 
-SUPPORTED_KEY_PROVIDERS = ("ollama_cloud", "nvidia", "openrouter", "google")
 install_status: dict[str, dict[str, Any]] = {}
 
 
@@ -108,9 +108,12 @@ class AppState:
             "auth_block_hits_total": 0,
             "auth_success_resets_total": 0,
         }
+        self.total_requests = 0
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=15, read=300, write=30, pool=30),
         )
+        self.base_urls: dict[str, str] = BASE_URLS.copy()
+        self.supported_providers: list[str] = ["ollama_cloud", "nvidia", "openrouter", "google"]
 
 
 state = AppState()
@@ -148,6 +151,39 @@ if STATIC_DIR.is_dir():
 # ---------------------------------------------------------------------------
 # Admin auth middleware – protects /api/* endpoints
 # ---------------------------------------------------------------------------
+import base64
+from fastapi.responses import Response
+
+@app.middleware("http")
+async def basic_auth_middleware(request: Request, call_next):
+    path = request.url.path.rstrip("/")
+    if not (path.startswith("/dashboard") or path.startswith("/api")):
+        return await call_next(request)
+
+    password = state.config.get("settings", {}).get("dashboard_password", "")
+    if not password:
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Basic "):
+        # Return 401 with WWW-Authenticate to trigger browser prompt
+        return Response(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="Rotator Dashboard"'}
+        )
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+        username, pwd = decoded.split(":", 1)
+        if username == "admin" and pwd == password:
+            return await call_next(request)
+    except Exception:
+        pass
+        
+    return Response(
+        status_code=401,
+        headers={"WWW-Authenticate": 'Basic realm="Rotator Dashboard"'}
+    )
+
 
 # Paths that do NOT require admin auth (public or with their own auth)
 _PUBLIC_PATH_PREFIXES = ("/v1/", "/dashboard", "/static", "/docs", "/openapi.json")
@@ -230,7 +266,7 @@ def normalize_keys_from_config(config: dict[str, Any]) -> dict[str, list[dict[st
     raw_keys = config.get("keys", {}) or {}
     normalized: dict[str, list[dict[str, str]]] = {}
 
-    for provider in SUPPORTED_KEY_PROVIDERS:
+    for provider in state.supported_providers:
         entries = raw_keys.get(provider, [])
         provider_field = secret_field_for_provider(provider)
         provider_items: list[dict[str, str]] = []
@@ -264,6 +300,9 @@ def log_event(
     model: str | None = None,
     source: str = "system",
 ) -> None:
+    if source == "proxy":
+        state.total_requests += 1
+
     state.logs.appendleft(
         {
             "time": datetime.now().strftime("%H:%M:%S"),
@@ -436,10 +475,16 @@ async def resolve_project_from_request(request: Request) -> dict[str, Any]:
     return project
 
 
-def enforce_project_policy(project: dict[str, Any], profile: str) -> None:
+def enforce_project_policy(project: dict[str, Any], profile: str, requested_model: str | None = None) -> None:
     policy = str(project.get("policy") or "full_access")
+    if policy == "full_access":
+        return
     if policy == "coding_only" and profile != "coding":
         raise HTTPException(status_code=403, detail="Project key is restricted to coding profile")
+    if policy.startswith("models:"):
+        allowed_models = [m.strip() for m in policy[7:].split(",") if m.strip()]
+        if requested_model and requested_model not in allowed_models:
+            raise HTTPException(status_code=403, detail=f"Project key is restricted to models: {', '.join(allowed_models)}")
 
 
 async def check_project_quota(project: dict[str, Any]) -> dict[str, Any]:
@@ -462,7 +507,7 @@ async def check_project_quota(project: dict[str, Any]) -> dict[str, Any]:
 
 def build_headers(provider: str, key_value: str) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
-    if provider in {"ollama_cloud", "nvidia", "openrouter", "google"} and key_value:
+    if provider != "local" and key_value:
         headers["Authorization"] = f"Bearer {key_value}"
     if provider == "openrouter":
         port = state.config.get("settings", {}).get("port", 47822)
@@ -485,7 +530,7 @@ def get_compat_aliases() -> dict[str, str]:
 
 def parse_explicit_target(value: str) -> RouteTarget | None:
     raw = str(value or "").strip()
-    for provider in BASE_URLS:
+    for provider in state.base_urls:
         prefix = f"{provider}:"
         if raw.startswith(prefix) and len(raw) > len(prefix):
             model_name = raw[len(prefix):].strip()
@@ -745,6 +790,20 @@ async def refresh_suggestions(force: bool = False) -> None:
 
 async def init_state() -> None:
     state.config = load_config()
+
+    # Load custom providers
+    custom_providers = state.config.get("custom_providers", {})
+    for cp_name, cp_data in custom_providers.items():
+        if isinstance(cp_data, dict) and "base_url" in cp_data:
+            state.base_urls[cp_name] = cp_data["base_url"].rstrip("/")
+            if cp_name not in state.supported_providers:
+                state.supported_providers.append(cp_name)
+
+    # Load custom models
+    custom_models = state.config.get("custom_models", [])
+    if isinstance(custom_models, list) and custom_models:
+        inject_custom_models(custom_models)
+
     db_path = state.config.get("settings", {}).get("db_file", "rotator.db")
     db_path = str((BASE_DIR / db_path).resolve()) if not Path(db_path).is_absolute() else db_path
     state.db = RotatorDB(db_path)
@@ -867,7 +926,7 @@ async def send_model_request(model_name: str, prompt: str, timeout: int = 60) ->
         ],
     }
     headers = build_headers(target.provider, key.value)
-    url = f"{BASE_URLS[target.provider]}/chat/completions"
+    url = f"{state.base_urls[target.provider]}/chat/completions"
     started = time.perf_counter()
     response = await state.client.post(url, headers=headers, json=payload, timeout=timeout)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -1213,7 +1272,7 @@ async def chat_completions(request: Request) -> Any:
     else:
         profile = detect_profile(payload)
 
-    enforce_project_policy(project, profile)
+    enforce_project_policy(project, profile, requested_model)
 
     quota_state = await check_project_quota(project)
     candidates = [explicit_target] if explicit_target else choose_targets(profile)
@@ -1614,7 +1673,7 @@ async def anthropic_messages(request: Request) -> Any:
     else:
         profile = "coding"
 
-    enforce_project_policy(project, profile)
+    enforce_project_policy(project, profile, requested_model)
 
     quota_state = await check_project_quota(project)
     candidates = [explicit_target] if explicit_target else choose_targets(profile)
@@ -1853,7 +1912,7 @@ async def purge_data_before(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/config/keys")
 async def get_config_keys() -> dict[str, Any]:
     config = load_config()
-    return {"keys": normalize_keys_from_config(config)}
+    return {"keys": normalize_keys_from_config(config), "providers": state.supported_providers}
 
 
 @app.post("/api/config/keys")
@@ -1865,7 +1924,7 @@ async def save_config_keys(payload: dict[str, Any]) -> dict[str, Any]:
     config = load_config()
     config_keys: dict[str, list[dict[str, str]]] = {}
 
-    for provider in SUPPORTED_KEY_PROVIDERS:
+    for provider in state.supported_providers:
         raw_entries = incoming.get(provider, [])
         if not isinstance(raw_entries, list):
             raise HTTPException(status_code=400, detail=f"Invalid keys list for provider '{provider}'")
@@ -2353,6 +2412,134 @@ async def openclaw_status() -> dict[str, Any]:
     result["channels"] = channels
     result["config_exists"] = config_path.is_file()
     return result
+
+
+# --- COPILOT TOOLS ---
+
+async def cp_get_status() -> str:
+    uptime = int(time.time() - state.started_at)
+    h = uptime // 3600
+    m = (uptime % 3600) // 60
+    s = uptime % 60
+    
+    active_keys = 0
+    if state.key_manager:
+        for p in state.key_manager.keys_by_provider:
+            active_keys += len(state.key_manager.keys_by_provider[p])
+            
+    return (
+        f"Statut Système :\n"
+        f"- Uptime : {h}h {m}m {s}s\n"
+        f"- Requêtes totales (session) : {state.total_requests}\n"
+        f"- Clés actives : {active_keys}\n"
+        f"- Providers supportés : {', '.join(state.supported_providers)}"
+    )
+
+async def cp_list_projects() -> str:
+    try:
+        if not state.db:
+            return "Base de données non initialisée."
+        projects = await state.db.get_all_projects()
+        if not projects:
+            return "Aucun projet trouvé."
+        res = "Liste des Projets :\n"
+        for p in projects:
+            res += f"- {p['name']} (ID: {p['id']}, Policy: {p['policy']}, Limit: {p['daily_limit']})\n"
+        return res
+    except Exception as e:
+        return f"Erreur lors de la lecture des projets : {str(e)}"
+
+# --- END COPILOT TOOLS ---
+
+
+@app.post("/api/copilot/chat")
+async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
+    """Agentic Copilot endpoint using the 'chat' profile with Tool Calling."""
+    msg = payload.get("message", "")
+    history = payload.get("history", [])
+
+    if not msg:
+        raise HTTPException(status_code=400, detail="Message empty")
+
+    # 1. System Prompt with Tool Definitions
+    system_prompt = (
+        "Tu es le Rotator Copilot. Tu as accès aux outils suivants :\n"
+        "- get_status() : Donne l'uptime, le nombre de requêtes et de clés.\n"
+        "- list_projects() : Liste les projets configurés et leurs politiques.\n"
+        "\n"
+        "Si tu as besoin d'une information pour répondre, utilise le format : [TOOL: name()]\n"
+        "Exemple: 'Je vais vérifier le statut. [TOOL: get_status()]'\n"
+        "Une fois que tu as le résultat, réponds normalement à l'utilisateur."
+    )
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in history:
+        messages.append({"role": h.get("role"), "content": h.get("content")})
+    messages.append({"role": "user", "content": msg})
+
+    async def get_response(msgs):
+        targets = choose_targets("chat")
+        if not targets:
+            return None, "Aucun modèle disponible pour le chat."
+        
+        last_err = "Inconnu"
+        for target in targets:
+            key_obj = state.key_manager.choose_key_for_target(target) if state.key_manager else None
+            if not key_obj:
+                last_err = f"Pas de clé pour {target.provider}"
+                continue
+            
+            headers = build_headers(target.provider, key_obj.value)
+            base_url = state.base_urls.get(target.provider)
+            
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers=headers,
+                        json={"model": target.model, "messages": msgs, "max_tokens": 1000}
+                    )
+                    if resp.status_code == 200:
+                        return resp.json()["choices"][0]["message"]["content"], None
+                    last_err = f"Erreur {target.provider} ({resp.status_code})"
+            except Exception as e:
+                last_err = f"Erreur {target.provider} : {str(e)}"
+        
+        return None, last_err
+
+    # Step 1: Initial call
+    bot_text, err = await get_response(messages)
+    if err: return {"response": f"Désolé, {err}"}
+
+    # Step 2: Check for Tool Calls
+    import re
+    tool_matches = re.findall(r"\[TOOL:\s*(\w+)\(\)\]", bot_text)
+    
+    if tool_matches:
+        tool_results = []
+        for tool_name in tool_matches:
+            if tool_name == "get_status":
+                res = await cp_get_status()
+                tool_results.append(f"Résultat de {tool_name}:\n{res}")
+            elif tool_name == "list_projects":
+                res = await cp_list_projects()
+                tool_results.append(f"Résultat de {tool_name}:\n{res}")
+            else:
+                tool_results.append(f"Outil {tool_name} inconnu.")
+        
+        # Final call with tool results
+        messages.append({"role": "assistant", "content": bot_text})
+        messages.append({"role": "system", "content": "\n\n".join(tool_results)})
+        
+        final_text, err = await get_response(messages)
+        if err: return {"response": f"Désolé, erreur après outil : {err}"}
+        
+        return {
+            "response": final_text,
+            "tool_calls": [{"name": tn} for tn in tool_matches]
+        }
+
+    return {"response": bot_text}
 
 
 @app.get("/api/openclaw/config")
@@ -3463,7 +3650,7 @@ async def health() -> dict[str, Any]:
             try:
                 key = keys[0] if keys else None
                 headers = build_headers(provider, key.value if key else "")
-                url = f"{BASE_URLS[provider]}/models"
+                url = f"{state.base_urls[provider]}/models"
                 res = await state.client.get(url, headers=headers, timeout=8)
                 if res.status_code >= 400:
                     status = "degraded"
@@ -4016,4 +4203,5 @@ if __name__ == "__main__":
 
     config = load_config()
     port = config.get("settings", {}).get("port", 47822)
-    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=False)
+    host = config.get("settings", {}).get("host", "127.0.0.1")
+    uvicorn.run("main:app", host=host, port=port, reload=False)
