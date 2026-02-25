@@ -924,13 +924,67 @@ async function loadOpenRouterModels() {
   try {
     const data = await api('/api/catalogue/openrouter');
     document.getElementById('openrouterLoading').style.display = 'none';
-    document.getElementById('openrouterModelGrid').innerHTML =
-      (data.models || []).map(m => renderModelCard(m, 'openrouter')).join('') ||
-      '<div style="color:var(--text-muted); padding:20px">Aucun modèle gratuit trouvé.</div>';
+
+    // Cache models and apply filters
+    if (data.models && data.models.length > 0) {
+      openrouterModelsCache = data.models;
+      filterOpenRouterModels();
+    } else {
+      document.getElementById('openrouterModelGrid').innerHTML =
+        '<div style="color:var(--text-muted); padding:20px">Aucun modèle gratuit trouvé.</div>';
+    }
+
     if (data.updated_at) showCatalogueTimestamp('openrouter', data.updated_at);
   } catch {
     document.getElementById('openrouterLoading').innerText = '❌ Erreur de chargement.';
   }
+}
+
+function filterOpenRouterModels() {
+  if (!openrouterModelsCache) return;
+
+  const q = document.getElementById('openrouterSearch').value;
+  const sortBy = document.getElementById('openrouterSort').value;
+  const contextFilter = document.getElementById('openrouterFilterContext').value;
+
+  // Step 1: Recherche puissante (fuzzy, multi-champs)
+  let filtered = searchModels(openrouterModelsCache, q);
+
+  // Step 2: Filtre par contexte
+  if (contextFilter) {
+    filtered = filtered.filter(m => {
+      const ctx = m.context_length || 0;
+      switch(contextFilter) {
+        case '32k': return ctx <= 32000;
+        case '128k': return ctx > 32000 && ctx <= 128000;
+        case '256k': return ctx > 128000 && ctx <= 256000;
+        case '512k+': return ctx > 512000;
+        default: return true;
+      }
+    });
+  }
+
+  // Step 3: TRI
+  filtered.sort((a, b) => {
+    switch(sortBy) {
+      case 'name-asc':
+        return a.name.localeCompare(b.name);
+      case 'name-desc':
+        return b.name.localeCompare(a.name);
+      case 'context-desc':
+        return (b.context_length || 0) - (a.context_length || 0);
+      case 'context-asc':
+        return (a.context_length || 0) - (b.context_length || 0);
+      default:
+        return 0;
+    }
+  });
+
+  document.getElementById('openrouterLoading').style.display = 'none';
+  document.getElementById('openrouterModelGrid').innerHTML =
+    filtered.length
+      ? filtered.map(m => renderModelCard(m, 'openrouter')).join('')
+      : '<div style="color:var(--text-muted); padding:20px; grid-column:1/-1">Aucun modèle trouvé.</div>';
 }
 
 async function loadNvidiaModels() {
@@ -939,13 +993,48 @@ async function loadNvidiaModels() {
   try {
     const data = await api('/api/catalogue/nvidia');
     document.getElementById('nvidiaLoading').style.display = 'none';
-    document.getElementById('nvidiaModelGrid').innerHTML =
-      (data.models || []).map(m => renderModelCard(m, 'nvidia')).join('') ||
-      '<div style="color:var(--text-muted); padding:20px">Configurez une clé NVIDIA pour voir les modèles.</div>';
+
+    // Cache models and apply filters
+    if (data.models && data.models.length > 0) {
+      nvidiaModelsCache = data.models;
+      filterNvidiaModels();
+    } else {
+      document.getElementById('nvidiaModelGrid').innerHTML =
+        '<div style="color:var(--text-muted); padding:20px">Configurez une clé NVIDIA pour voir les modèles.</div>';
+    }
+
     if (data.updated_at) showCatalogueTimestamp('nvidia', data.updated_at);
   } catch {
     document.getElementById('nvidiaLoading').innerText = '❌ Erreur de chargement.';
   }
+}
+
+function filterNvidiaModels() {
+  if (!nvidiaModelsCache) return;
+
+  const q = document.getElementById('nvidiaSearch').value;
+  const sortBy = document.getElementById('nvidiaSort').value;
+
+  // Step 1: Recherche puissante (fuzzy, multi-champs)
+  let filtered = searchModels(nvidiaModelsCache, q);
+
+  // Step 2: TRI (par nom seulement pour NVIDIA)
+  filtered.sort((a, b) => {
+    switch(sortBy) {
+      case 'name-asc':
+        return a.name.localeCompare(b.name);
+      case 'name-desc':
+        return b.name.localeCompare(a.name);
+      default:
+        return 0;
+    }
+  });
+
+  document.getElementById('nvidiaLoading').style.display = 'none';
+  document.getElementById('nvidiaModelGrid').innerHTML =
+    filtered.length
+      ? filtered.map(m => renderModelCard(m, 'nvidia')).join('')
+      : '<div style="color:var(--text-muted); padding:20px; grid-column:1/-1">Aucun modèle trouvé.</div>';
 }
 
 async function loadLocalModels() {

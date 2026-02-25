@@ -1505,6 +1505,26 @@
             style="background:var(--accent-dim); border:1px solid var(--accent-bdr); border-radius:var(--r); padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--accent)">
             💡 Seuls les modèles gratuits (pricing = 0) sont affichés. Nécessite une clé OpenRouter configurée.
           </div>
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+              <input id="openrouterSearch" placeholder="Rechercher un modèle..." style="flex:1; min-width:200px; width:auto"
+                oninput="filterOpenRouterModels()" />
+              <select id="openrouterSort" onchange="filterOpenRouterModels()" style="width:150px">
+                <option value="name-asc">Nom A → Z</option>
+                <option value="name-desc">Nom Z → A</option>
+                <option value="context-desc">Contexte +</option>
+                <option value="context-asc">Contexte -</option>
+              </select>
+              <select id="openrouterFilterContext" onchange="filterOpenRouterModels()" style="width:140px">
+                <option value="">Tous contextes</option>
+                <option value="32k">≤ 32K</option>
+                <option value="128k">≤ 128K</option>
+                <option value="256k">≤ 256K</option>
+                <option value="512k+">512K+</option>
+              </select>
+              <button onclick="loadOpenRouterModels()">↺ Actualiser</button>
+            </div>
+          </div>
           <div id="openrouterModelGrid"
             style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
           <div id="openrouterLoading" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px">
@@ -1516,6 +1536,17 @@
             style="background:var(--green-dim); border:1px solid var(--green-bdr); border-radius:var(--r); padding:10px 14px; margin-bottom:14px; font-size:12px; color:var(--green)">
             ✅ Tous ces modèles sont accessibles avec vos clés NVIDIA. Une seule clé donne accès à l'ensemble du
             catalogue.
+          </div>
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+              <input id="nvidiaSearch" placeholder="Rechercher un modèle..." style="flex:1; min-width:200px; width:auto"
+                oninput="filterNvidiaModels()" />
+              <select id="nvidiaSort" onchange="filterNvidiaModels()" style="width:150px">
+                <option value="name-asc">Nom A → Z</option>
+                <option value="name-desc">Nom Z → A</option>
+              </select>
+              <button onclick="loadNvidiaModels()">↺ Actualiser</button>
+            </div>
           </div>
           <div id="nvidiaModelGrid"
             style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
