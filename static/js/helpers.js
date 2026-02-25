@@ -1,3 +1,86 @@
+/* ─── I18N (Internationalization) ─── */
+const i18n = {
+  current: 'fr',
+  translations: {
+    fr: {
+      loading: 'Chargement...',
+      error: 'Erreur',
+      retry: 'Réessayer',
+      copied: 'Copié!',
+      copyFailed: 'Erreur de copie',
+      save: 'Enregistrer',
+      cancel: 'Annuler',
+      delete: 'Supprimer',
+      edit: 'Modifier',
+      close: 'Fermer',
+      confirm: 'Confirmer',
+      yes: 'Oui',
+      no: 'Non',
+      apiKeyLabel: 'Clé API',
+      baseUrlLabel: 'Base URL',
+      modelsLabel: 'Modèles disponibles',
+      showKey: 'Afficher la clé API',
+      hideKey: 'Masquer la clé API',
+      copyKey: 'Copier la clé API',
+    },
+    en: {
+      loading: 'Loading...',
+      error: 'Error',
+      retry: 'Retry',
+      copied: 'Copied!',
+      copyFailed: 'Copy failed',
+      save: 'Save',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      edit: 'Edit',
+      close: 'Close',
+      confirm: 'Confirm',
+      yes: 'Yes',
+      no: 'No',
+      apiKeyLabel: 'API Key',
+      baseUrlLabel: 'Base URL',
+      modelsLabel: 'Available Models',
+      showKey: 'Show API Key',
+      hideKey: 'Hide API Key',
+      copyKey: 'Copy API Key',
+    }
+  },
+  t(key) {
+    return this.translations[this.current]?.[key] || this.translations['fr'][key] || key;
+  },
+  setLang(lang) {
+    if (this.translations[lang]) {
+      this.current = lang;
+      document.documentElement.lang = lang;
+      // Update language buttons
+      document.getElementById('langFr')?.setAttribute('aria-pressed', lang === 'fr');
+      document.getElementById('langEn')?.setAttribute('aria-pressed', lang === 'en');
+      this.updateUI();
+    }
+  },
+  detectLang() {
+    const browserLang = navigator.language?.split('-')[0];
+    if (this.translations[browserLang]) {
+      this.setLang(browserLang);
+    }
+  },
+  updateUI() {
+    // Update elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      el.textContent = this.t(key);
+    });
+    // Update placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      el.placeholder = this.t(key);
+    });
+  }
+};
+
+// Auto-detect language on load
+i18n.detectLang();
+
 /* ─── HELPERS ─── */
 async function api(url, method = 'GET', body = null) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -113,6 +196,33 @@ async function copyFrom(id, button) {
   await copyText((el?.innerText || '').trim(), button);
 }
 
+// API Key visibility toggle (for security)
+let apiKeyVisible = false;
+function toggleApiKeyVisibility(button) {
+  const displayEl = document.getElementById('onboardApiKey');
+  const hiddenEl = document.getElementById('onboardApiKeyValue');
+  if (!displayEl || !hiddenEl) return;
+
+  apiKeyVisible = !apiKeyVisible;
+  if (apiKeyVisible) {
+    displayEl.textContent = hiddenEl.value;
+    displayEl.style.fontFamily = 'var(--font-mono)';
+    button.textContent = '🔒';
+    button.setAttribute('aria-label', 'Masquer la clé API');
+  } else {
+    displayEl.textContent = '••••••••';
+    displayEl.style.fontFamily = '';
+    button.textContent = '👁️';
+    button.setAttribute('aria-label', 'Afficher la clé API');
+  }
+}
+
+async function copyApiKey(button) {
+  const hiddenEl = document.getElementById('onboardApiKeyValue');
+  if (!hiddenEl) return;
+  await copyText(hiddenEl.value, button);
+}
+
 let welcomeVisible = true;
 
 function toggleWelcome() {
@@ -173,6 +283,40 @@ async function installOllama() {
 }
 
 async function refreshAllCatalogues(btn) {
+  // For Ollama tab, show confirmation first
+  if (catTab === 'ollama') {
+    const confirmed = confirm(
+      'Cette opération va mettre à jour la liste des modèles depuis Ollama.\n\n' +
+      'Cela peut prendre jusqu\'à 3 minutes selon votre connexion.\n' +
+      'Pendant ce temps, le catalogue sera indisponible.\n\n' +
+      'Voulez-vous continuer ?'
+    );
+    if (!confirmed) return;
+
+    // Use the new Ollama-specific scrape endpoint
+    btn.disabled = true;
+    btn.innerText = '⏳ Rafraîchissement...';
+    const st = document.getElementById('catalogueRefreshStatus');
+    st.innerText = 'Lancement du rafraîchissement Ollama...';
+
+    try {
+      const res = await api('/api/catalogue/ollama/scrape', 'POST');
+      if (res.ok) {
+        // Show progress
+        showOllamaScrapeProgress(res.progress || { status: 'running', current_model: 'Démarrage...' });
+      } else {
+        st.innerText = '❌ Erreur: ' + (res.error || 'Erreur inconnue');
+      }
+    } catch (err) {
+      st.innerText = '❌ Erreur: ' + err.message;
+    }
+
+    btn.disabled = false;
+    btn.innerText = '↺ Rafraîchir tous les catalogues';
+    return;
+  }
+
+  // For other tabs, use the existing refresh
   btn.disabled = true;
   btn.innerText = '⏳ Rafraîchissement...';
   const st = document.getElementById('catalogueRefreshStatus');
@@ -203,12 +347,50 @@ function showCatalogueTimestamp(provider, ts) {
 }
 
 function renderModelCard(m, source) {
-  const isInstalled = m.installed || false;
-  const isCloud = (m.tags || []).includes('cloud') || source === 'openrouter' || source === 'nvidia';
-  const sizeLabel = m.size ? formatBytes(m.size) : m.parameter_size || '—';
-  const paramSize = m.parameter_size || (m.details || {}).parameter_size || '';
+  // Check if this is the new grouped structure (Ollama)
+  const isGrouped = m.variants && m.variants.length > 0;
+
+  // For grouped models (Ollama), extract info from group level
+  const modelName = m.name;
+  const description = m.description || '';
+  const paramsSummary = m.params_summary || '';
+  const visionSupport = m.vision_support || '';
+  const agenticRl = m.agentic_rl || '';
+  const modifiedAt = m.modified_at || '';
+  const variants = m.variants || [];
+
+  // Get info from first variant for display
+  const firstVariant = variants.length > 0 ? variants[0] : {};
+  const isInstalled = firstVariant.installed || m.installed || false;
+  const modelSize = firstVariant.size || m.size || 0;
+
+  const sizeLabel = modelSize ? formatBytes(modelSize) : m.parameter_size || '—';
+  const paramSize = paramsSummary || m.parameter_size || (m.details || {}).parameter_size || '';
   const family = (m.details || {}).family || '';
   const quant = (m.details || {}).quantization_level || '';
+
+  // Availability badge - use new grouped structure for Ollama
+  let availabilityBadge = '';
+  if (source === 'ollama' || source === 'ollama-library') {
+    // Check if model is cloud or local based on name
+    const isCloudVariant = m.name.includes('-cloud');
+    const isInstalled = m.installed || false;
+    if (isCloudVariant) {
+      availabilityBadge = '<span class="badge amber" style="font-size:10px; flex-shrink:0">☁️ Cloud</span>';
+    } else if (isInstalled) {
+      availabilityBadge = '<span class="badge green" style="font-size:10px; flex-shrink:0">💾 Local</span>';
+    } else {
+      availabilityBadge = '<span class="badge" style="font-size:10px; flex-shrink:0">⬇ Disponible</span>';
+    }
+  } else if (source === 'local') {
+    availabilityBadge = '<span class="badge green" style="font-size:10px; flex-shrink:0">💾 Local</span>';
+  } else if ((m.tags || []).includes('cloud') || source === 'openrouter' || source === 'nvidia') {
+    availabilityBadge = '<span class="badge amber" style="font-size:10px; flex-shrink:0">☁️ Cloud</span>';
+  } else if (isInstalled) {
+    availabilityBadge = '<span class="badge green" style="font-size:10px; flex-shrink:0">✅ Installé</span>';
+  } else {
+    availabilityBadge = '<span class="badge" style="font-size:10px; flex-shrink:0">⬇ Disponible</span>';
+  }
 
   const tagBadges = (m.tags || []).slice(0, 4).map(t => {
     const colors = { cloud: 'amber', vision: 'blue', tools: 'green', thinking: 'purple', code: 'green' };
@@ -216,95 +398,236 @@ function renderModelCard(m, source) {
     return `<span class="badge ${c}" style="font-size:10px">${t}</span>`;
   }).join('');
 
+  // Enriched capability badges
+  const capBadges = [
+    visionSupport && visionSupport !== 'non' ? `<span class="badge blue" style="font-size:10px">👁 Vision</span>` : '',
+    agenticRl && agenticRl !== 'non' ? `<span class="badge purple" style="font-size:10px">🤖 Agentic</span>` : '',
+  ].filter(Boolean).join('');
+
+  // Downloads and updated - from first variant or model
+  const downloads = firstVariant.downloads || m.downloads || 0;
+  const downloadsBadge = downloads ? `<span class="badge" style="font-size:10px">⬇ ${downloads >= 1e6 ? (downloads / 1e6).toFixed(0) + 'M' : downloads >= 1e3 ? (downloads / 1e3).toFixed(0) + 'K' : downloads}</span>` : '';
+  const updatedBadge = modifiedAt ? `<span class="badge" style="font-size:10px">📅 ${formatUpdated(modifiedAt)}</span>` : '';
+
+  // Show variant count for grouped models
+  const variantCount = variants.length > 1 ? `<span class="badge" style="font-size:10px">📦 ${variants.length} variants</span>` : '';
+
   const extraBadges = [
     paramSize ? `<span class="badge" style="font-size:10px">🧠 ${paramSize}</span>` : '',
     family ? `<span class="badge" style="font-size:10px">🏷 ${family}</span>` : '',
     quant ? `<span class="badge purple" style="font-size:10px">⚙ ${quant}</span>` : '',
-    m.downloads ? `<span class="badge" style="font-size:10px">⬇ ${m.downloads >= 1e6 ? (m.downloads / 1e6).toFixed(1) + 'M' : m.downloads >= 1e3 ? (m.downloads / 1e3).toFixed(0) + 'K' : m.downloads}</span>` : '',
   ].filter(Boolean).join('');
 
-  const actionBtn = source === 'local'
-    ? `<button class="danger" onclick="event.stopPropagation(); deleteLocalModel('${m.name}')" style="font-size:11px; padding:5px 8px">🗑 Supprimer</button>`
-    : isCloud
-      ? `<button class="primary" onclick="event.stopPropagation(); addToRotator('${m.name}','${source}')" style="font-size:11px; padding:5px 10px">➕ Ajouter au rotator</button>`
-      : isInstalled
-        ? `<button onclick="event.stopPropagation(); addToRotator('${m.name}','local')" style="font-size:11px; padding:5px 10px">➕ Ajouter au rotator</button>`
-        : `<button class="primary" onclick="event.stopPropagation(); installModel('${m.name}', this)" style="font-size:11px; padding:5px 10px">⬇ Installer</button>`;
-
+  // NO buttons on small card - user clicks to see modal
   const cardData = encodeURIComponent(JSON.stringify(m));
 
+  // Params summary subtitle
+  const paramsSub = paramsSummary ? `<div style="font-size:11px; color:var(--accent); margin-bottom:6px; font-family:var(--font-mono)">${paramsSummary}</div>` : '';
+  // Top benchmark mini-line
+  const benchLine = m.top_benchmark ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:8px">🏆 ${m.top_benchmark}</div>` : '';
+
   return `
-      <div id="modelcard-${m.name.replace(/[^a-z0-9]/gi, '-')}" onclick="showModelDetail(decodeURIComponent('${cardData}'), '${source}')" style="
+      <div id="modelcard-${modelName.replace(/[^a-z0-9]/gi, '-')}" onclick="showModelDetail(decodeURIComponent('${cardData}'), '${source}')" style="
         background:var(--surface); border:1px solid var(--border);
         border-radius:var(--r-lg); padding:16px; cursor:pointer;
         ${isInstalled ? 'border-color:var(--green-bdr);' : ''}
         transition: border-color .2s, transform .15s, box-shadow .15s;
+        display: flex; flex-direction: column;
       " onmouseover="this.style.borderColor='var(--border-hi)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,.3)'"
          onmouseout="this.style.borderColor='${isInstalled ? 'var(--green-bdr)' : 'var(--border)'}'; this.style.transform='none'; this.style.boxShadow='none'">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px">
-          <div style="font-family:var(--font-mono); font-size:13px; font-weight:600; color:#fff; flex:1; margin-right:8px">${m.name}</div>
-          ${isInstalled
-      ? '<span class="badge green" style="font-size:10px; flex-shrink:0">✅ Installé</span>'
-      : isCloud
-        ? '<span class="badge amber" style="font-size:10px; flex-shrink:0">☁️ Cloud</span>'
-        : '<span class="badge" style="font-size:10px; flex-shrink:0">⬇ Disponible</span>'
-    }
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px">
+          <div style="font-family:var(--font-mono); font-size:13px; font-weight:600; color:#fff; flex:1; margin-right:8px">${modelName}</div>
+          ${availabilityBadge}
         </div>
-        <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px; line-height:1.4">
-          ${(m.description || '').slice(0, 120)}${(m.description || '').length > 120 ? '...' : ''}
+        ${paramsSub}
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px; line-height:1.4">
+          ${description.slice(0, 100)}${description.length > 100 ? '...' : ''}
         </div>
-        <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px">
+        <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:6px">
+          ${capBadges}
           ${tagBadges}
-          ${sizeLabel !== '—' ? `<span class="badge" style="font-size:10px">📦 ${sizeLabel}</span>` : ''}
-          ${m.context_length ? `<span class="badge" style="font-size:10px">📐 ${formatContext(m.context_length)}</span>` : ''}
+          ${variantCount}
+          ${sizeLabel && sizeLabel !== '—' ? `<span class="badge" style="font-size:10px">📦 ${sizeLabel}</span>` : ''}
           ${extraBadges}
         </div>
-        <div id="progress-${m.name.replace(/[^a-z0-9]/gi, '-')}" style="display:none; margin-bottom:10px">
-          <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px" id="progress-label-${m.name.replace(/[^a-z0-9]/gi, '-')}">Téléchargement...</div>
-          <div class="progress"><span id="progress-bar-${m.name.replace(/[^a-z0-9]/gi, '-')}" style="width:0%"></span></div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:6px">
+          ${downloadsBadge}
+          ${updatedBadge}
         </div>
-        <div style="display:flex; gap:6px; justify-content:flex-end">${actionBtn}</div>
+        ${benchLine}
       </div>`;
 }
 
 function showModelDetail(jsonStr, source) {
   const m = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
-  const isInstalled = m.installed || false;
-  const isCloud = (m.tags || []).includes('cloud') || source === 'openrouter' || source === 'nvidia';
+
+  // Check if this is the new grouped structure (Ollama with variants)
+  const variants = m.variants || [];
+  const isGrouped = variants.length > 0;
+
+  // For grouped models, get info from group level
+  const modelName = m.name;
+  const description = m.description || '';
+  const paramsSummary = m.params_summary || '';
+  const visionSupport = m.vision_support || '';
+  const agenticRl = m.agentic_rl || '';
+  const topBenchmark = m.top_benchmark || '';
+  const modifiedAt = m.modified_at || '';
+
+  // Get info from first variant for single-model display
+  const firstVariant = isGrouped ? variants[0] : {};
+  const isInstalled = firstVariant.installed || m.installed || false;
+  const modelSize = firstVariant.size || m.size || 0;
   const details = m.details || {};
-  const sizeLabel = m.size ? formatBytes(m.size) : m.parameter_size || '—';
 
-  document.getElementById('modelDetailTitle').innerText = m.name;
+  // Determine if cloud or local variant
+  const isCloudVariant = (v) => v.variant && v.variant.includes('-cloud');
+  const isLocalVariant = (v) => !isCloudVariant(v) && (v.installed || (v.size && v.size > 0));
 
-  const infoRows = [
-    { label: 'Nom', value: m.name },
-    { label: 'Description', value: m.description || '—' },
-    { label: 'Taille', value: sizeLabel },
-    { label: 'Paramètres', value: m.parameter_size || details.parameter_size || '—' },
-    { label: 'Famille', value: details.family || '—' },
-    { label: 'Quantization', value: details.quantization_level || '—' },
-    { label: 'Format', value: details.format || '—' },
-    { label: 'Contexte', value: m.context_length ? formatContext(m.context_length) : '—' },
-    { label: 'Téléchargements', value: m.downloads ? m.downloads.toLocaleString() : '—' },
-    { label: 'Source', value: source },
-    { label: 'Statut', value: isInstalled ? '✅ Installé localement' : isCloud ? '☁️ Cloud' : '⬇ Disponible au téléchargement' },
-  ].filter(r => r.value !== '—');
+  document.getElementById('modelDetailTitle').innerText = modelName;
 
-  const tagBadges = (m.tags || []).map(t => {
-    const colors = { cloud: 'amber', vision: 'blue', tools: 'green', thinking: 'purple', code: 'green' };
-    const c = colors[t] || '';
-    return `<span class="badge ${c}" style="font-size:11px">${t}</span>`;
-  }).join(' ');
+  // If grouped with variants, show variant table
+  if (isGrouped && (source === 'ollama' || source === 'ollama-library')) {
+    // Build variant table rows
+    const variantRows = variants.map(v => {
+      const vName = v.name || `${modelName}:${v.variant}`;
+      const vSize = v.size ? formatBytes(v.size) : '—';
+      const vContext = v.context_length ? formatContext(v.context_length) : '—';
+      const vInstalled = v.installed || false;
+      const vCloud = isCloudVariant(v);
+      const vLocal = isLocalVariant(v);
 
-  const actionBtn = source === 'local'
-    ? `<button class="danger" onclick="closeModelDetail(); deleteLocalModel('${m.name}')" style="font-size:12px; padding:8px 16px">🗑 Supprimer</button>`
-    : isCloud
-      ? `<button class="primary" onclick="closeModelDetail(); addToRotator('${m.name}','${source}')" style="font-size:12px; padding:8px 16px">➕ Ajouter au rotator</button>`
-      : isInstalled
-        ? `<button onclick="closeModelDetail(); addToRotator('${m.name}','local')" style="font-size:12px; padding:8px 16px">➕ Ajouter au rotator</button>`
-        : `<button class="primary" onclick="closeModelDetail(); installModel('${m.name}')" style="font-size:12px; padding:8px 16px">⬇ Installer</button>`;
+      // Determine action button
+      let actionBtn = '';
+      if (vInstalled) {
+        actionBtn = `<button class="secondary" style="font-size:11px; padding:4px 8px">✅ Installé</button>`;
+      } else if (vCloud) {
+        actionBtn = `<button class="primary" onclick="closeModelDetail(); addToMyCatalogue(${JSON.stringify(v).replace(/"/g, '&quot;')}, this)" style="font-size:11px; padding:4px 8px">➕ Ajouter à Mon Catalogue</button>`;
+      } else if (vLocal || v.size) {
+        actionBtn = `<button class="primary" onclick="closeModelDetail(); confirmInstallModel('${vName}', ${v.size || 0})" style="font-size:11px; padding:4px 8px">⬇ Télécharger</button>`;
+      }
 
-  document.getElementById('modelDetailBody').innerHTML = `
+      // Determine badge
+      let badge = '';
+      if (vCloud) {
+        badge = '<span class="badge amber" style="font-size:9px">☁️ Cloud</span>';
+      } else if (vInstalled) {
+        badge = '<span class="badge green" style="font-size:9px">💾 Installé</span>';
+      } else if (v.size) {
+        badge = '<span class="badge" style="font-size:9px">💾 Local</span>';
+      }
+
+      return `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px 8px; font-family:var(--font-mono); font-size:12px">${v.variant} ${badge}</td>
+          <td style="padding:10px 8px; font-size:12px">${vSize}</td>
+          <td style="padding:10px 8px; font-size:12px">${vContext}</td>
+          <td style="padding:10px 8px; font-size:12px">Text${visionSupport && visionSupport !== 'non' ? ', Image' : ''}</td>
+          <td style="padding:10px 8px; text-align:right">${actionBtn}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Group-level info
+    const infoRows = [
+      { label: 'Description', value: description || '—' },
+      { label: 'Paramètres', value: paramsSummary || '—' },
+      { label: '👁 Vision', value: visionSupport && visionSupport !== 'non' ? visionSupport : '—' },
+      { label: '🤖 Agentic', value: agenticRl && agenticRl !== 'non' ? agenticRl : '—' },
+      { label: '🏆 Benchmark', value: topBenchmark || '—' },
+      { label: 'Mis à jour', value: modifiedAt ? formatUpdated(modifiedAt) : '—' },
+    ].filter(r => r.value !== '—');
+
+    const capBadges = [
+      visionSupport && visionSupport !== 'non' ? `<span class="badge blue" style="font-size:11px">👁 Vision</span>` : '',
+      agenticRl && agenticRl !== 'non' ? `<span class="badge purple" style="font-size:11px">🤖 Agentic</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    // Action buttons
+    const modelBase = modelName.split(':')[0];
+    const ollamaLink = `<a href="https://ollama.com/library/${modelBase}" target="_blank" style="font-size:12px; padding:8px 16px; text-decoration:none; color:var(--accent)">🔗 Voir sur Ollama</a>`;
+
+    const addAllBtn = `<button class="secondary" onclick="addToMyCatalogue(${JSON.stringify(m).replace(/"/g, '&quot;')}, this)" style="font-size:12px; padding:8px 16px">✨ Ajouter à Mon Catalogue</button>`;
+
+    document.getElementById('modelDetailBody').innerHTML = `
+      <div style="margin-bottom:16px">
+        ${capBadges ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px">${capBadges}</div>` : ''}
+        <table style="width:100%; font-size:12px; border-collapse:collapse; margin-bottom:16px">
+          ${infoRows.map(r => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 12px 8px 0; color:var(--text-muted); font-weight:600; white-space:nowrap; width:130px">${r.label}</td>
+              <td style="padding:8px 0; color:var(--text); font-family:var(--font-mono); word-break:break-all">${r.value}</td>
+            </tr>
+          `).join('')}
+        </table>
+
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px; color:var(--text)">Variantes (${variants.length})</div>
+        <table style="width:100%; font-size:12px; border-collapse:collapse; background:var(--surface); border-radius:8px; overflow:hidden">
+          <thead>
+            <tr style="background:var(--bg-dim)">
+              <th style="padding:10px 8px; text-align:left; font-size:11px; color:var(--text-muted)">Variante</th>
+              <th style="padding:10px 8px; text-align:left; font-size:11px; color:var(--text-muted)">Taille</th>
+              <th style="padding:10px 8px; text-align:left; font-size:11px; color:var(--text-muted)">Contexte</th>
+              <th style="padding:10px 8px; text-align:left; font-size:11px; color:var(--text-muted)">Input</th>
+              <th style="padding:10px 8px; text-align:right; font-size:11px; color:var(--text-muted)">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${variantRows}
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center; padding-top:8px; border-top:1px solid var(--border)">
+        ${ollamaLink}
+        ${addAllBtn}
+        <button onclick="closeModelDetail()">Fermer</button>
+      </div>
+    `;
+  } else {
+    // Original single model display
+    const sizeLabel = modelSize ? formatBytes(modelSize) : m.parameter_size || '—';
+    const isCloud = (m.tags || []).includes('cloud') || source === 'openrouter' || source === 'nvidia';
+
+    const infoRows = [
+      { label: 'Nom', value: modelName },
+      { label: 'Description', value: description || '—' },
+      { label: 'Architecture', value: paramsSummary || '—' },
+      { label: 'Taille', value: sizeLabel },
+      { label: 'Paramètres', value: m.parameter_size || details.parameter_size || '—' },
+      { label: 'Famille', value: details.family || '—' },
+      { label: 'Quantization', value: details.quantization_level || '—' },
+      { label: 'Format', value: details.format || '—' },
+      { label: 'Contexte', value: m.context_length ? formatContext(m.context_length) : '—' },
+      { label: '👁 Vision', value: visionSupport && visionSupport !== 'non' ? visionSupport : '—' },
+      { label: '🤖 Agentic RL', value: agenticRl && agenticRl !== 'non' ? agenticRl : '—' },
+      { label: '🏆 Benchmark', value: topBenchmark || '—' },
+      { label: 'Téléchargements', value: (firstVariant.downloads || m.downloads) ? (firstVariant.downloads || m.downloads).toLocaleString() : '—' },
+      { label: 'Source', value: source },
+      { label: 'Statut', value: isInstalled ? '✅ Installé localement' : isCloud ? '☁️ Cloud' : '⬇ Disponible au téléchargement' },
+    ].filter(r => r.value !== '—');
+
+    const tagBadges = (m.tags || []).map(t => {
+      const colors = { cloud: 'amber', vision: 'blue', tools: 'green', thinking: 'purple', code: 'green' };
+      const c = colors[t] || '';
+      return `<span class="badge ${c}" style="font-size:11px">${t}</span>`;
+    }).join(' ');
+
+    const actionBtn = source === 'local'
+      ? `<button class="danger" onclick="closeModelDetail(); deleteLocalModel('${modelName}')" style="font-size:12px; padding:8px 16px">🗑 Supprimer</button>`
+      : source === 'my-catalogue'
+        ? `<button class="danger" onclick="closeModelDetail(); removeFromMyCatalogue('${modelName}')" style="font-size:12px; padding:8px 16px">🗑 Retirer du catalogue</button>`
+        : isCloud
+          ? `<button class="primary" onclick="closeModelDetail(); addToRotator('${modelName}','${source}')" style="font-size:12px; padding:8px 16px">➕ Ajouter au catalogue</button>`
+          : isInstalled
+            ? `<button onclick="closeModelDetail(); addToRotator('${modelName}','local')" style="font-size:12px; padding:8px 16px">➕ Ajouter au rotator</button>`
+            : `<button class="primary" onclick="closeModelDetail(); confirmInstallModel('${modelName}', ${modelSize || 0})" style="font-size:12px; padding:8px 16px">⬇ Télécharger & Installer</button>`;
+
+    const modelBase = modelName.split(':')[0];
+    const ollamaLink = (source === 'ollama' || source === 'local' || source === 'my-catalogue') ? `<a href="https://ollama.com/library/${modelBase}" target="_blank" style="font-size:12px; padding:8px 16px; text-decoration:none; color:var(--accent)">🔗 Voir sur Ollama</a>` : '';
+
+    const addBtn = (source === 'ollama' || source === 'local' || source === 'ollama-library') ? `<button class="secondary" onclick="addToMyCatalogue(${JSON.stringify(m).replace(/"/g, '&quot;')}, this)" style="font-size:12px; padding:8px 16px">✨ Ajouter à Mon Catalogue</button>` : '';
+
+    document.getElementById('modelDetailBody').innerHTML = `
       <div style="margin-bottom:16px">
         ${tagBadges ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px">${tagBadges}</div>` : ''}
         <table style="width:100%; font-size:12px; border-collapse:collapse">
@@ -317,11 +640,14 @@ function showModelDetail(jsonStr, source) {
         </table>
       </div>
       ${m.digest ? `<div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; font-family:var(--font-mono); word-break:break-all">Digest: ${m.digest}</div>` : ''}
-      <div style="display:flex; gap:8px; justify-content:flex-end; padding-top:8px; border-top:1px solid var(--border)">
+      <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center; padding-top:8px; border-top:1px solid var(--border)">
+        ${ollamaLink}
+        ${addBtn}
         <button onclick="closeModelDetail()">Fermer</button>
         ${actionBtn}
       </div>
     `;
+  }
 
   document.getElementById('modelDetailModal').classList.add('active');
 }
@@ -334,6 +660,11 @@ function formatBytes(bytes) {
   if (!bytes) return '—';
   const gb = bytes / 1e9;
   return gb >= 1 ? gb.toFixed(1) + ' GB' : (bytes / 1e6).toFixed(0) + ' MB';
+}
+
+function formatUpdated(dateStr) {
+  // The date is already in human-readable format like "2 years ago"
+  return dateStr || '—';
 }
 
 function formatContext(n) {
@@ -357,32 +688,227 @@ function showCatTab(name) {
 async function loadOllamaModels() {
   document.getElementById('ollamaLoading').style.display = 'block';
   document.getElementById('ollamaModelGrid').innerHTML = '';
+
+  // If already polling, stop it
+  if (window.ollamaProgressInterval) {
+    clearInterval(window.ollamaProgressInterval);
+    window.ollamaProgressInterval = null;
+  }
+
   try {
     const data = await api('/api/catalogue/ollama');
-    ollamaModelsCache = data.models || [];
-    filterOllamaModels();
-    if (data.updated_at) showCatalogueTimestamp('ollama', data.updated_at);
+    console.log('loadOllamaModels response:', data);
+
+    // If we have models, display them
+    if (data.models && data.models.length > 0) {
+      ollamaModelsCache = data.models;
+      filterOllamaModels();
+      const refreshDate = data.last_refresh || data.updated_at;
+      if (refreshDate) showCatalogueTimestamp('ollama', refreshDate);
+      return;
+    }
+
+    // If scraping in progress, show progress
+    if (data.status === 'scraping' || data.status === 'running') {
+      showOllamaScrapeProgress(data.progress);
+      return;
+    }
+
+    // No models - trigger scrape
+    console.log('No models, triggering scrape...');
+    await api('/api/catalogue/ollama/scrape', 'POST');
+    showOllamaScrapeProgress({ status: 'running', current_model: 'Démarrage...', total_models: 0, scraped_count: 0 });
+
   } catch (err) {
+    console.error('loadOllamaModels error:', err);
     document.getElementById('ollamaLoading').innerText = '❌ Impossible de charger le catalogue. Vérifiez votre connexion.';
   }
 }
 
+function showOllamaScrapeProgress(progress) {
+  const loadingEl = document.getElementById('ollamaLoading');
+  const gridEl = document.getElementById('ollamaModelGrid');
+
+  // Show initial message
+  loadingEl.innerHTML = `
+    <div style="text-align:center; padding: 20px;">
+      <div style="font-size: 18px; margin-bottom: 10px;">🚀 Premier lancement : génération du catalogue...</div>
+      <div style="color: var(--text-dim); font-size: 14px;" id="ollamaProgressMsg">Initialisation...</div>
+    </div>
+  `;
+  loadingEl.style.display = 'block';
+  gridEl.innerHTML = '';
+
+  // Poll for progress updates
+  window.ollamaProgressInterval = setInterval(async () => {
+    try {
+      const progressData = await api('/api/catalogue/ollama/progress');
+      const p = progressData;
+
+      if (p.status === 'completed') {
+        // Scraping done, reload models
+        clearInterval(window.ollamaProgressInterval);
+        window.ollamaProgressInterval = null;
+
+        loadingEl.innerHTML = '<div style="text-align:center; padding: 20px;"><div style="font-size: 18px;">✅ Catalogue généré ! Chargement...</div></div>';
+
+        // Reload models
+        try {
+          const data = await api('/api/catalogue/ollama');
+          console.log('Ollama data received:', data);
+          if (data.models && data.models.length > 0) {
+            ollamaModelsCache = data.models;
+            filterOllamaModels();
+            if (data.last_refresh) showCatalogueTimestamp('ollama', data.last_refresh);
+          } else {
+            // No models returned, show error
+            console.log('No models in response:', data);
+            loadingEl.innerText = '❌ Erreur: Aucun modèle retourné. Vérifiez le cache.';
+          }
+        } catch (err) {
+          console.error('Error loading models:', err);
+          loadingEl.innerText = '❌ Erreur lors du chargement: ' + err.message;
+        }
+        return;
+      }
+
+      if (p.status === 'error') {
+        clearInterval(window.ollamaProgressInterval);
+        window.ollamaProgressInterval = null;
+        loadingEl.innerText = '❌ Erreur lors du scraping: ' + (p.error || 'Erreur inconnue');
+        return;
+      }
+
+      // Show progress
+      const progressMsg = document.getElementById('ollamaProgressMsg');
+      if (progressMsg) {
+        const total = p.total_models || 0;
+        const current = p.scraped_count || 0;
+        const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+
+        progressMsg.innerHTML = `
+          <div>${p.current_model || 'Chargement...'}</div>
+          <div style="margin-top: 10px;">
+            <div style="background: var(--bg-dim); height: 8px; border-radius: 4px; overflow: hidden; max-width: 300px; margin: 0 auto;">
+              <div style="background: var(--accent); height: 100%; width: ${percent}%; transition: width 0.3s;"></div>
+            </div>
+            <div style="margin-top: 5px;">${current} / ${total} modèles (${percent}%)</div>
+          </div>
+          <div style="margin-top: 10px; font-size: 12px; color: var(--text-dim);">Veuillez ne pas rafraîchir la page</div>
+        `;
+      }
+
+    } catch (err) {
+      console.error('Error polling progress:', err);
+    }
+  }, 2000); // Poll every 2 seconds
+}
+
+// Parse modified_at for sorting - convert to "months ago" (smaller = more recent)
+function parseDateModified(str) {
+  if (!str || str === 'unknown') return 999; // unknown at end
+  const num = parseInt(str);
+
+  if (str.includes('year')) return num * 12; // 2 years = 24 months
+  if (str.includes('month')) return num; // months
+  if (str.includes('week') || str.includes('day')) return 0; // recent
+  return 999;
+}
+
+// Parse downloads for sorting ("109.6K" -> 109600)
+function parseDownloads(str) {
+  if (!str) return 0;
+  if (str.includes('M')) return parseFloat(str) * 1e6;
+  if (str.includes('K')) return parseFloat(str) * 1e3;
+  return parseInt(str) || 0;
+}
+
+// Fuzzy match - tolerates typos
+function fuzzyMatch(text, query) {
+  if (!text || !query) return { match: false, score: 0 };
+  const t = text.toLowerCase();
+  const q = query.toLowerCase().trim();
+  if (!q) return { match: true, score: 1 };
+  if (t.includes(q)) return { match: true, score: 1 };
+
+  // Fuzzy: tolère jusqu'à 2 caractères manquants/incorrects
+  let misses = 0;
+  let qIndex = 0;
+  for (let i = 0; i < t.length && qIndex < q.length; i++) {
+    if (t[i] === q[qIndex]) {
+      qIndex++;
+    } else {
+      misses++;
+    }
+  }
+  return { match: qIndex === q.length && misses <= 2, score: 1 - (misses / q.length) };
+}
+
+// Search across name, description, and tags
+function searchModels(models, query) {
+  if (!query || !query.trim()) return models;
+  const q = query.toLowerCase().trim();
+  return models.filter(m => {
+    if (fuzzyMatch(m.name, q).match) return true;
+    if (fuzzyMatch(m.description || '', q).match) return true;
+    if ((m.tags || []).some(t => fuzzyMatch(t, q).match)) return true;
+    return false;
+  });
+}
+
 function filterOllamaModels() {
-  const q = document.getElementById('ollamaSearch').value.toLowerCase();
+  const q = document.getElementById('ollamaSearch').value;
+  const sortBy = document.getElementById('ollamaSort').value;
   const type = document.getElementById('ollamaFilterType').value;
   const size = document.getElementById('ollamaFilterSize').value;
 
-  const filtered = ollamaModelsCache.filter(m => {
-    if (q && !m.name.toLowerCase().includes(q) && !(m.description || '').toLowerCase().includes(q)) return false;
-    if (type && !(m.tags || []).includes(type)) return false;
+  // Step 1: Recherche puissante (fuzzy, multi-champs)
+  let filtered = searchModels(ollamaModelsCache, q);
+
+  // Step 2: Filtres existants (type et size)
+  filtered = filtered.filter(m => {
+    const firstVariant = (m.variants && m.variants[0]) || {};
+    const modelSize = firstVariant.size || m.size || 0;
+
+    // Type filter
+    if (type) {
+      const isCloud = firstVariant.is_cloud || m.is_cloud;
+      const hasVision = (m.vision_support || '').toLowerCase() === 'oui';
+      const hasTools = (m.tags || []).includes('tools');
+      const hasThinking = (m.tags || []).includes('thinking');
+
+      if (type === 'cloud' && !isCloud) return false;
+      if (type === 'local' && isCloud) return false;
+      if (type === 'vision' && !hasVision) return false;
+      if (type === 'tools' && !hasTools) return false;
+      if (type === 'thinking' && !hasThinking) return false;
+    }
+
+    // Size filter
     if (size) {
-      const gb = (m.size || 0) / 1e9;
+      const gb = modelSize / 1e9;
       if (size === 'tiny' && gb >= 2) return false;
       if (size === 'small' && (gb < 2 || gb >= 8)) return false;
       if (size === 'medium' && (gb < 8 || gb >= 30)) return false;
       if (size === 'large' && gb < 30) return false;
     }
     return true;
+  });
+
+  // Step 3: TRI - Plus récent, Plus populaires, Nom A-Z, Nom Z-A
+  filtered.sort((a, b) => {
+    switch(sortBy) {
+      case 'recent':
+        return parseDateModified(a.modified_at) - parseDateModified(b.modified_at);
+      case 'popular':
+        return parseDownloads(b.downloads) - parseDownloads(a.downloads);
+      case 'name-asc':
+        return a.name.localeCompare(b.name);
+      case 'name-desc':
+        return b.name.localeCompare(a.name);
+      default:
+        return 0;
+    }
   });
 
   document.getElementById('ollamaLoading').style.display = 'none';
@@ -432,6 +958,19 @@ async function loadLocalModels() {
     document.getElementById('localModelGrid').innerHTML =
       '<div style="color:var(--text-muted); padding:20px">Ollama non détecté.</div>';
   }
+}
+
+function confirmInstallModel(modelName, sizeBytes, button) {
+  const sizeGB = sizeBytes ? (sizeBytes / 1e9).toFixed(1) : null;
+  let msg = `Télécharger et installer "${modelName}" ?`;
+  if (sizeGB && parseFloat(sizeGB) > 0) {
+    msg += `\n\n📦 Taille estimée : ${sizeGB} Go`;
+    if (parseFloat(sizeGB) > 10) {
+      msg += `\n⚠️ Ce téléchargement est volumineux et peut prendre du temps.`;
+    }
+  }
+  if (!confirm(msg)) return;
+  installModel(modelName, button);
 }
 
 async function installModel(modelName, button) {
@@ -498,5 +1037,160 @@ async function restartProxy() {
     setTimeout(() => { location.reload(); }, 3000);
   } catch (err) {
     alert('❌ Restart failed: ' + err.message);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Custom Profiles
+// ─────────────────────────────────────────────
+let customProfilesLoaded = false;
+let newProfileModels = [];
+
+async function loadCustomProfiles() {
+  try {
+    const data = await api('/api/profiles/custom');
+
+    // Builtin profiles
+    const builtinEl = document.getElementById('builtinProfilesList');
+    if (builtinEl) {
+      const emojis = { coding: '💻', reasoning: '🧠', chat: '💬', long: '📄', vision: '👁️', audio: '🎵', translate: '🌍' };
+      // Make builtin profile badges clickable to show models in order
+      builtinEl.innerHTML = (data.builtin_profiles || []).map(p =>
+        `<button class="badge" style="font-size:11px; padding:4px 10px; cursor:pointer" onclick="showBuiltinProfileModels('${p}')">${emojis[p] || '📌'} ${p}</button>`
+      ).join('');
+    }
+
+    // Custom profiles
+    const customEl = document.getElementById('customProfilesList');
+    if (customEl) {
+      const customs = data.custom_profiles || [];
+      if (customs.length === 0) {
+        customEl.innerHTML = '<div style="font-size:12px; color:var(--text-dim); padding:10px">Aucun profil personnalisé créé.</div>';
+      } else {
+        customEl.innerHTML = customs.map(cp => `
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:12px; display:flex; justify-content:space-between; align-items:center">
+            <div>
+              <div style="font-weight:600; font-size:13px; font-family:var(--font-mono); color:#fff">✨ ${cp.name}</div>
+              ${cp.description ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px">${cp.description}</div>` : ''}
+              ${cp.models && cp.models.length > 0 ? `<div style="font-size:10px; color:var(--text-muted); margin-top:4px">${cp.models.length} modèle(s) associé(s)</div>` : '<div style="font-size:10px; color:var(--text-muted); margin-top:4px">Aucun modèle associé</div>'}
+            </div>
+            <button class="danger" onclick="deleteCustomProfile('${cp.name}')" style="font-size:11px; padding:4px 10px">🗑 Supprimer</button>
+          </div>
+        `).join('');
+      }
+    }
+
+    customProfilesLoaded = true;
+  } catch (err) {
+    console.error('Failed to load custom profiles:', err);
+  }
+}
+
+// Show models for a builtin profile in a modal (ordered routing chain)
+async function showBuiltinProfileModels(profile) {
+  try {
+    const data = await api(`/api/profiles/builtin/${encodeURIComponent(profile)}`);
+    const body = document.getElementById('profileModelsBody');
+    const title = document.getElementById('profileModelsTitle');
+    if (!body || !title) return;
+    title.innerText = `Profil: ${data.profile}`;
+    const models = data.models || [];
+    if (models.length === 0) {
+      body.innerHTML = '<div style="color:var(--text-muted); padding:12px">Aucun modèle configuré pour ce profil.</div>';
+    } else {
+      body.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:8px; padding:6px 0">
+          ${models.map((m, i) => `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:6px; background:var(--surface)"><div style="font-family:var(--font-mono); color:var(--text)">${i+1}. ${m}</div><button onclick="copyText('${m.replace(/'/g, "\\'")}', this)" class="ghost" style="font-size:11px">📋</button></div>`).join('')}
+        </div>`;
+    }
+    document.getElementById('profileModelsModal').classList.add('active');
+  } catch (err) {
+    alert('Erreur: ' + (err.message || err));
+  }
+}
+
+function closeProfileModelsModal() { document.getElementById('profileModelsModal').classList.remove('active'); }
+
+function removeNewProfileModel(index) {
+  newProfileModels.splice(index, 1);
+  renderNewProfileModels();
+}
+
+function renderNewProfileModels() {
+  const el = document.getElementById('newProfileModelsList');
+  if (!el) return;
+  if (newProfileModels.length === 0) {
+    el.innerHTML = '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle ajouté</div>';
+    return;
+  }
+  el.innerHTML = newProfileModels.map((m, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:6px 8px; border-radius:6px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <span style="color:var(--text-muted); font-size:11px">${i+1}.</span>
+        <span style="font-family:var(--font-mono); color:var(--text)">${m.model || m}</span>
+        ${m.provider ? `<span style="font-size:10px; color:var(--text-dim)">(${m.provider})</span>` : ''}
+      </div>
+      <div style="display:flex; gap:8px"><button class="ghost" onclick="removeNewProfileModel(${i})">✕</button></div>
+    </div>
+  `).join('');
+}
+
+async function deleteCustomProfile(name) {
+  if (!confirm(`Supprimer le profil "${name}" ?`)) return;
+  try {
+    await api(`/api/profiles/custom/${encodeURIComponent(name)}`, 'DELETE');
+    await loadCustomProfiles();
+  } catch (err) {
+    alert('❌ Erreur : ' + (err.message || 'Impossible de supprimer'));
+  }
+}
+
+// ─────────────────────────────────────────────
+// Mon Catalogue (My Models)
+// ─────────────────────────────────────────────
+async function loadMyModels() {
+  try {
+    const data = await api('/api/catalogue/my-models');
+    const grid = document.getElementById('myModelsGrid');
+    const empty = document.getElementById('myModelsEmpty');
+
+    if (!grid) return;
+
+    const models = data.models || [];
+    if (models.length === 0) {
+      grid.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    grid.innerHTML = models.map(m => renderModelCard(m, 'my-catalogue')).join('');
+  } catch (err) {
+    console.error('Failed to load my models:', err);
+  }
+}
+
+async function addToMyCatalogue(modelData, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await api('/api/catalogue/my-models/add', 'POST', { model: modelData });
+    showNotification('✨ Modèle ajouté à votre catalogue !');
+    if (btn) {
+      btn.innerText = '✅ Dans mon catalogue';
+      btn.classList.add('success');
+    }
+  } catch (err) {
+    alert('❌ Erreur : ' + err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function removeFromMyCatalogue(name) {
+  if (!confirm(`Retirer "${name}" de votre catalogue ?`)) return;
+  try {
+    await api('/api/catalogue/my-models/remove', 'POST', { name });
+    await loadMyModels();
+  } catch (err) {
+    alert('❌ Erreur : ' + err.message);
   }
 }

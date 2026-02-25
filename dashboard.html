@@ -38,6 +38,12 @@
       <span>En ligne · Port <span id="sidebarPort" style="font-family:var(--font-mono)">47822</span></span>
     </div>
 
+    <!-- Language Switcher -->
+    <div style="margin:8px 14px 0; display:flex; gap:4px;" role="group" aria-label="Changer la langue">
+      <button class="lang-btn" id="langFr" onclick="i18n.setLang('fr')" aria-label="Français" aria-pressed="true">FR</button>
+      <button class="lang-btn" id="langEn" onclick="i18n.setLang('en')" aria-label="English" aria-pressed="false">EN</button>
+    </div>
+
     <div class="nav-section-label">Navigation</div>
 
     <div class="sidebar-nav">
@@ -142,6 +148,14 @@
         <span>Catalogue modèles</span>
       </div>
 
+      <div class="nav-item top-tab" onclick="showTab('myprofiles')">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        <span>Mes Profils</span>
+      </div>
+
       <div class="nav-item top-tab" onclick="showTab('config')">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
           <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5" />
@@ -215,10 +229,16 @@
     <div class="content">
 
       <!-- ══════════ VUE D'ENSEMBLE ══════════ -->
-      <div id="tab-routing" class="section top-section active">
+      <div id="tab-routing" class="section top-section active" role="region" aria-label="Vue d'ensemble">
 
         <!-- Welcome banner -->
-        <div id="welcomeBanner" class="welcome-banner">
+        <div id="welcomeBanner" class="welcome-banner" role="complementary" aria-label="Bienvenue">
+          <noscript>
+            <div class="alert alert-warning" role="alert">
+              <strong>⚠️ JavaScript désactivé</strong>
+              <p>Cette page nécessite JavaScript pour fonctionner correctement. Veuillez l'activer pour voir le dashboard complet.</p>
+            </div>
+          </noscript>
           <div style="display:flex; gap:14px; align-items:flex-start">
             <span style="font-size:26px; flex-shrink:0; line-height:1">👋</span>
             <div style="flex:1">
@@ -296,8 +316,10 @@
                 style="font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; font-weight:700">
                 Clé API</div>
               <div class="copy-row" style="margin-top:0">
-                <span class="copy-val">rotator</span>
-                <button class="copy-btn" onclick="copyText('rotator', this)">📋</button>
+                <span class="copy-val" id="onboardApiKey">••••••••</span>
+                <input type="hidden" id="onboardApiKeyValue" value="rotator">
+                <button class="copy-btn" onclick="toggleApiKeyVisibility(this)" aria-label="Afficher/Masquer la clé API" title="Afficher/Masquer">👁️</button>
+                <button class="copy-btn" onclick="copyApiKey(this)" aria-label="Copier la clé API" title="Copier">📋</button>
               </div>
             </div>
             <div>
@@ -319,147 +341,339 @@
             <div style="font-size:12px; color:var(--text-dim); margin-top:2px">Sélection automatique du meilleur modèle
               disponible par profil</div>
           </div>
+          <button class="ghost" onclick="showTab('presets')" aria-label="Gérer les presets">Gérer →</button>
         </div>
-        <div class="grid-auto" id="profileCards" style="margin-bottom:22px"></div>
+
+        <!-- Skeleton Loader for Profiles -->
+        <div id="profileCardsSkeleton" class="grid-auto" style="margin-bottom:22px" aria-live="polite">
+          <div class="skeleton-card" role="status" aria-label="Chargement des profils">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des profils">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des profils">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des profils">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+        </div>
+
+        <!-- Actual Profile Cards (hidden until loaded) -->
+        <div class="grid-auto" id="profileCards" style="margin-bottom:22px; display:none;" aria-live="polite"></div>
+        <div id="profileCardsError" class="error-state" style="display:none;" role="alert">
+          <span>⚠️ </span>
+          <span>Erreur lors du chargement des profils. <button class="ghost" onclick="loadProfileCards()">Réessayer</button></span>
+        </div>
 
         <!-- Providers -->
         <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px; margin-bottom:2px">État des
           providers</div>
         <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Clés actives, quotas et contrôles</div>
-        <div class="grid-2" id="providerGrid" style="margin-bottom:22px"></div>
+
+        <!-- Skeleton Loader for Providers -->
+        <div id="providerGridSkeleton" class="grid-2" style="margin-bottom:22px" aria-live="polite">
+          <div class="skeleton-card" role="status" aria-label="Chargement des providers">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des providers">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des providers">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card" role="status" aria-label="Chargement des providers">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+        </div>
+
+        <!-- Actual Provider Grid (hidden until loaded) -->
+        <div class="grid-2" id="providerGrid" style="margin-bottom:22px; display:none;" aria-live="polite"></div>
+        <div id="providerGridError" class="error-state" style="display:none;" role="alert">
+          <span>⚠️ </span>
+          <span>Erreur lors du chargement des providers. <button class="ghost" onclick="loadProviderCards()">Réessayer</button></span>
+        </div>
 
         <!-- Security -->
         <div style="font-size:15px; font-weight:800; color:#fff; letter-spacing:-0.3px; margin-bottom:2px">Sécurité
         </div>
         <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Mode auth et protection anti brute-force
         </div>
-        <div id="securityCard" class="card" style="margin-bottom:22px"></div>
+
+        <!-- Skeleton Loader for Security -->
+        <div id="securityCardSkeleton" class="card" style="margin-bottom:22px" aria-live="polite">
+          <div class="skeleton" style="height:20px; width:60%; margin-bottom:12px"></div>
+          <div class="skeleton" style="height:16px; width:40%; margin-bottom:8px"></div>
+          <div class="skeleton" style="height:16px; width:50%;"></div>
+        </div>
+
+        <!-- Actual Security Card (hidden until loaded) -->
+        <div id="securityCard" class="card" style="margin-bottom:22px; display:none;" aria-live="polite"></div>
+        <div id="securityCardError" class="error-state" style="display:none;" role="alert">
+          <span>⚠️ </span>
+          <span>Erreur lors du chargement de la sécurité. <button class="ghost" onclick="loadSecurityCard()">Réessayer</button></span>
+        </div>
 
         <div id="suggestions"></div>
       </div>
 
-      <!-- ══════════ PRESETS ══════════ -->
-      <div id="tab-presets" class="section top-section">
+      <!-- ══════════ PRESETS / CONFIGURATIONS ══════════ -->
+      <div id="tab-presets" class="section top-section" role="region" aria-label="Configurations de routing">
         <div class="page-header">
-          <div class="page-title">Presets de routage</div>
-          <div class="page-desc">Créez et appliquez des configurations nommées pour basculer rapidement entre différents
-            modes</div>
+          <div class="page-title">Configurations de Routing</div>
+          <div class="page-desc">Définissez quels modèles IA utiliser pour chaque type de tâche. Créez, sauvegardez et basculez entre vos configs.</div>
         </div>
-        <div class="grid-2">
-          <div>
-            <div
-              style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px">
-              Bibliothèque</div>
-            <div id="presetList" class="flex-col"></div>
-            <button class="primary" style="margin-top:12px; width:100%" onclick="newPreset()">+ Nouveau preset</button>
-          </div>
-          <div>
-            <div
-              style="font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px">
-              Éditeur de preset</div>
-            <div class="card">
-              <div id="presetEditor"></div>
-              <hr class="divider">
-              <div class="flex-col">
-                <input id="presetName" placeholder="Nom du preset (ex: Mode Puissance Max)" />
-                <input id="presetDesc" placeholder="Description courte" />
-              </div>
-              <div class="flex-row" style="margin-top:12px">
-                <button class="primary" onclick="savePreset()">💾 Sauvegarder</button>
-                <button onclick="applyPresetTemp()">▶ Appliquer sans sauvegarder</button>
+
+        <!-- Help/Explanation Card -->
+        <div class="card" style="margin-bottom:18px; background:var(--surface2); border-left:3px solid var(--accent)">
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="font-size:24px"></span>
+            <div>
+              <div style="font-weight:700; color:#fff; margin-bottom:6px">Comment ça marche?</div>
+              <div style="font-size:12px; color:var(--text-dim); line-height:1.6">
+                <strong>Profiles</strong> = types de tâches (coding, chat, reasoning...)<br>
+                <strong>Configuration</strong> = quels modèles utiliser pour chaque profile<br>
+                <span style="color:var(--accent)">Appliquez une config pour changer tous vos routing chains en 1 clic!</span>
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Templates Quick Access -->
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px">
+            Templates rapides
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            <button class="ghost" onclick="loadTemplate('free')" title="Modèles gratuits uniquement">🆓 Gratuit</button>
+            <button class="ghost" onclick="loadTemplate('power')" title="Meilleurs modèles payants">⚡ Puissance</button>
+            <button class="ghost" onclick="loadTemplate('local')" title="Only local Ollama models">💻 Local</button>
+            <button class="ghost" onclick="loadTemplate('balanced')" title="Mix gratuit + premium">⚖️ Équilibré</button>
+          </div>
+        </div>
+
+        <!-- Skeleton Loader for Presets -->
+        <div id="presetsSkeleton" class="grid-3" style="margin-bottom:18px" aria-live="polite">
+          <div class="skeleton-card">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="skeleton-card">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
+          <div class="skeleton-card">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
+        </div>
+
+        <!-- Main Content: library | Editor | Preview -->
+        <div class="grid-3" id="presetsContent" style="display:none" aria-live="polite">
+          <!-- Column 1: Library -->
+          <div>
+            <div class="section-label" aria-label="Bibliothèque des configurations">
+              <span class="section-label-icon">📚</span>
+              Bibliothèque
+            </div>
+            <div id="presetList" class="flex-col" role="list" aria-label="Liste des configurations"></div>
+            <button class="primary" style="margin-top:12px; width:100%" onclick="newPreset()" aria-label="Créer une nouvelle configuration">
+              + Nouvelle config
+            </button>
+          </div>
+
+          <!-- Column 2: Editor -->
+          <div>
+            <div class="section-label">
+              <span class="section-label-icon">✏️</span>
+              Éditeur
+            </div>
+            <div class="card" role="form" aria-label="Éditer la configuration">
+              <div id="presetEditor" aria-label="Contenu de l'éditeur"></div>
+              <hr class="divider">
+              <div class="flex-col" role="group" aria-label="Informations de la configuration">
+                <label for="presetName" class="sr-only">Nom de la configuration</label>
+                <input id="presetName" placeholder="Nom (ex: Mode Dev)" aria-required="true" />
+                <label for="presetDesc" class="sr-only">Description</label>
+                <input id="presetDesc" placeholder="Description courte" />
+              </div>
+              <div class="flex-row" style="margin-top:12px" role="group" aria-label="Actions">
+                <button class="primary" onclick="savePreset()" aria-label="Sauvegarder la configuration">💾 Sauvegarder</button>
+                <button onclick="applyPresetTemp()" aria-label="Tester sans sauvegarder">▶ Tester</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: Live Preview -->
+          <div>
+            <div class="section-label">
+              <span class="section-label-icon">👁️</span>
+              Aperçu
+              <span style="font-weight:400; font-size:10px; color:var(--text-muted)">(temps réel)</span>
+            </div>
+            <div id="presetPreview" class="card" style="font-size:11px" aria-label="Aperçu des routing chains">
+              <div style="color:var(--text-muted); padding:20px; text-align:center">
+                Sélectionnez une config ou créez-en une pour voir l'aperçu
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="presetsError" class="error-state" style="display:none" role="alert">
+          <span>⚠️ </span>
+          <span>Erreur lors du chargement. <button class="ghost" onclick="loadPresets()">Réessayer</button></span>
         </div>
       </div>
 
       <!-- ══════════ TESTS ══════════ -->
-      <div id="tab-tests" class="section top-section">
+      <div id="tab-tests" class="section top-section" role="region" aria-label="Tests et Benchmark">
         <div class="page-header">
           <div class="page-title">Tests &amp; Benchmark</div>
-          <div class="page-desc">Vérifiez que chaque provider répond correctement, mesurez les performances et comparez
-            les modèles</div>
+          <div class="page-desc">Vérifiez que chaque provider répond correctement, mesurez les performances et comparez les modèles</div>
         </div>
+
         <div class="card">
-          <div class="subtabs">
-            <button class="subtab sub-tab active" onclick="showSubTab('unit')">Tests rapides</button>
-            <button class="subtab sub-tab" onclick="showSubTab('bench')">Benchmark vitesse</button>
-            <button class="subtab sub-tab" onclick="showSubTab('compare')">Comparer des modèles</button>
+          <div class="subtabs" role="tablist" aria-label="Onglets de tests">
+            <button class="subtab sub-tab active" onclick="showSubTab('unit')" role="tab" aria-selected="true" aria-controls="sub-unit">Tests rapides</button>
+            <button class="subtab sub-tab" onclick="showSubTab('bench')" role="tab" aria-selected="false" aria-controls="sub-bench">Benchmark vitesse</button>
+            <button class="subtab sub-tab" onclick="showSubTab('compare')" role="tab" aria-selected="false" aria-controls="sub-compare">Comparer des modèles</button>
           </div>
 
-          <div id="sub-unit" class="sub-section active">
-            <div class="flex-row" style="margin-bottom:14px">
-              <button class="primary" onclick="runAllTests()">▶ Tout tester</button>
-              <button onclick="exportTestResults()">⬇ Exporter JSON</button>
+          <!-- Tests Rapides -->
+          <div id="sub-unit" class="sub-section active" role="tabpanel" aria-label="Tests rapides">
+            <div class="flex-row" style="margin-bottom:14px" role="group" aria-label="Actions de test">
+              <button class="primary" id="runAllTestsBtn" onclick="runAllTests()" aria-label="Lancer tous les tests">▶ Tout tester</button>
+              <button onclick="exportTestResults()" aria-label="Exporter les résultats en JSON">⬇ Exporter JSON</button>
             </div>
-            <div id="testsList" class="flex-col"></div>
+            <div id="testsList" class="flex-col" role="list" aria-label="Liste des tests"></div>
 
-            <div class="card" style="margin-top:14px; background:var(--surface2)">
+            <!-- API Key Test Center -->
+            <div class="card" style="margin-top:14px; background:var(--surface2)" role="region" aria-label="Centre de test des clés API">
               <div class="card-title">
                 <span class="card-title-icon">🔑</span>
                 Centre de test des clés API
               </div>
-              <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">Test séquentiel des clés cloud.
-                Vert = OK, orange = quota/avertissement, rouge = défaut/réseau.</div>
-              <div class="flex-row" style="margin-bottom:10px">
-                <button class="primary" onclick="testAllKeysCenter()">🧪 Tester toutes les clés</button>
-                <button onclick="loadKeyTestCenter()">↺ Recharger les clés</button>
+              <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px">
+                Test séquentiel des clés cloud. Vert = OK, orange = quota/avertissement, rouge = défaut/réseau.
               </div>
-              <div id="keyTestCenterStatus" class="status-line"></div>
-              <div id="keyTestCenterHost" class="flex-col" style="margin-top:8px"></div>
+              <div class="flex-row" style="margin-bottom:10px" role="group" aria-label="Actions de test des clés">
+                <button class="primary" id="testAllKeysBtn" onclick="testAllKeysCenter()" aria-label="Tester toutes les clés API">🧪 Tester toutes les clés</button>
+                <button onclick="loadKeyTestCenter()" aria-label="Recharger les clés">↺ Recharger les clés</button>
+              </div>
+              <div id="keyTestCenterStatus" class="status-line" role="status" aria-live="polite"></div>
+              <div id="keyTestCenterHost" class="flex-col" style="margin-top:8px" role="list" aria-label="Résultats des tests de clés"></div>
             </div>
           </div>
 
-          <div id="sub-bench" class="sub-section">
-            <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">Envoie un prompt standard à chaque
-              modèle et mesure temps de réponse, tokens/s et qualité.</div>
-            <div class="flex-row" style="margin-bottom:14px">
-              <button class="primary" onclick="startBenchmark()">▶ Lancer le benchmark</button>
-              <button onclick="stopBenchmark()">⏹ Arrêter</button>
+          <!-- Benchmark -->
+          <div id="sub-bench" class="sub-section" role="tabpanel" aria-label="Benchmark vitesse">
+            <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">
+              Envoie un prompt standard à chaque modèle et mesure temps de réponse, tokens/s et qualité.
             </div>
-            <div id="benchTable"></div>
+            <div class="flex-row" style="margin-bottom:14px" role="group" aria-label="Actions de benchmark">
+              <button class="primary" id="startBenchBtn" onclick="startBenchmark()" aria-label="Lancer le benchmark">▶ Lancer le benchmark</button>
+              <button id="stopBenchBtn" onclick="stopBenchmark()" aria-label="Arrêter le benchmark" disabled>⏹ Arrêter</button>
+            </div>
+            <div id="benchTable" role="region" aria-label="Résultats du benchmark"></div>
+            <div id="benchProgress" class="progress-container" style="display:none" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress"><span id="benchProgressBar" style="width:0%"></span></div>
+              <div id="benchProgressLabel" style="font-size:11px; color:var(--text-dim); margin-top:4px"></div>
+            </div>
           </div>
 
-          <div id="sub-compare" class="sub-section">
-            <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">Envoyez le même prompt à plusieurs
-              modèles simultanément et comparez les réponses.</div>
+          <!-- Comparer -->
+          <div id="sub-compare" class="sub-section" role="tabpanel" aria-label="Comparer des modèles">
+            <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px">
+              Envoyez le même prompt à plusieurs modèles simultanément et comparez les réponses.
+            </div>
+            <label for="comparePrompt" class="sr-only">Prompt de comparaison</label>
             <textarea id="comparePrompt" rows="4" style="width:100%; margin-bottom:10px"
-              placeholder="Entrez votre prompt ici..."></textarea>
-            <div class="flex-row" style="margin-bottom:14px">
-              <select id="compareM1" style="flex:1; width:auto"></select>
-              <select id="compareM2" style="flex:1; width:auto"></select>
-              <select id="compareM3" style="flex:1; width:auto"></select>
-              <button class="primary" onclick="runCompare()">▶ Comparer</button>
+              placeholder="Entrez votre prompt ici..." aria-label="Entrez votre prompt ici"></textarea>
+            <div class="flex-row" style="margin-bottom:14px" role="group" aria-label="Sélection des modèles à comparer">
+              <label for="compareM1" class="sr-only">Modèle 1</label>
+              <select id="compareM1" style="flex:1; width:auto" aria-label="Modèle 1"></select>
+              <label for="compareM2" class="sr-only">Modèle 2</label>
+              <select id="compareM2" style="flex:1; width:auto" aria-label="Modèle 2"></select>
+              <label for="compareM3" class="sr-only">Modèle 3</label>
+              <select id="compareM3" style="flex:1; width:auto" aria-label="Modèle 3"></select>
+              <button class="primary" id="runCompareBtn" onclick="runCompare()" aria-label="Lancer la comparaison">▶ Comparer</button>
             </div>
-            <div id="compareResults" class="grid-3"></div>
+            <div id="compareResults" class="grid-3" role="region" aria-label="Résultats de la comparaison"></div>
           </div>
         </div>
       </div>
 
       <!-- ══════════ STATS ══════════ -->
-      <div id="tab-stats" class="section top-section">
+      <div id="tab-stats" class="section top-section" role="region" aria-label="Statistiques">
         <div class="page-header">
           <div class="page-title">Statistiques</div>
-          <div class="page-desc">Analyse détaillée de l'utilisation, des performances et des quotas restants</div>
+          <div class="page-desc">Analyse détaillée de l'utilisation, des performances et quotas restants</div>
         </div>
-        <div class="flex-row" style="align-items:center; margin-bottom:18px">
-          <select id="statsRange" onchange="refreshStats()" style="width:160px">
-            <option value="today">Aujourd'hui</option>
-            <option value="week">7 derniers jours</option>
-            <option value="month">30 derniers jours</option>
-          </select>
-          <button onclick="exportStats()">⬇ Exporter CSV</button>
+
+        <!-- Skeleton Loader -->
+        <div id="statsSkeleton" aria-live="polite">
+          <div class="flex-row" style="align-items:center; margin-bottom:18px">
+            <div class="skeleton" style="height:36px; width:160px; border-radius:4px"></div>
+            <div class="skeleton" style="height:36px; width:100px; margin-left:8px; border-radius:4px"></div>
+          </div>
+          <div class="grid-3" style="margin-bottom:18px">
+            <div class="skeleton-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text short"></div></div>
+            <div class="skeleton-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text short"></div></div>
+            <div class="skeleton-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text short"></div></div>
+          </div>
+          <div class="grid-2">
+            <div class="skeleton-card"><div class="skeleton skeleton-title"></div><div class="skeleton" style="height:150px"></div></div>
+            <div class="skeleton-card"><div class="skeleton skeleton-title"></div><div class="skeleton" style="height:150px"></div></div>
+          </div>
         </div>
-        <div class="grid-3" id="kpi" style="margin-bottom:18px"></div>
-        <div class="grid-2">
-          <div class="card">
-            <div class="card-title"><span class="card-title-icon">📈</span>Requêtes par provider</div>
-            <canvas id="chartProviders"></canvas>
+
+        <!-- Main Content (hidden until loaded) -->
+        <div id="statsContent" style="display:none" aria-live="polite">
+          <div class="flex-row" style="align-items:center; margin-bottom:18px" role="group" aria-label="Options de statistiques">
+            <label for="statsRange" class="sr-only">Période</label>
+            <select id="statsRange" onchange="refreshStats()" style="width:160px" aria-label="Sélectionner la période">
+              <option value="today">Aujourd'hui</option>
+              <option value="week">7 derniers jours</option>
+              <option value="month">30 derniers jours</option>
+            </select>
+            <button onclick="exportStats()" aria-label="Exporter en CSV">Export CSV</button>
           </div>
-          <div class="card">
-            <div class="card-title"><span class="card-title-icon">🍩</span>Répartition par profil</div>
-            <canvas id="chartProfiles"></canvas>
+          <div class="grid-3" id="kpi" style="margin-bottom:18px" role="region" aria-label="Indicateurs clés"></div>
+          <div class="grid-2">
+            <div class="card" role="img" aria-label="Graphique des requêtes par provider">
+              <div class="card-title"><span class="card-title-icon">[BAR]</span>Requetes par provider</div>
+              <canvas id="chartProviders" aria-label="Graphique des requêtes par provider"></canvas>
+            </div>
+            <div class="card" role="img" aria-label="Graphique de répartition par profil">
+              <div class="card-title"><span class="card-title-icon">[PIE]</span>Repartition par profil</div>
+              <canvas id="chartProfiles" aria-label="Graphique de répartition par profil"></canvas>
+            </div>
           </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="statsError" class="error-state" style="display:none" role="alert">
+          <span>⚠️ </span>
+          <span>Erreur lors du chargement. <button class="ghost" onclick="refreshStats()">Réessayer</button></span>
         </div>
       </div>
 
@@ -500,6 +714,7 @@
           <button onclick="document.getElementById('keysImportInput').click()">⬆ Import JSON</button>
           <input id="keysImportInput" type="file" accept="application/json" style="display:none; width:auto"
             onchange="importKeys(event)" />
+          <button class="accent" onclick="openAddProviderModal()">➕ Ajouter un provider</button>
         </div>
         <div id="keysStatus" class="status-line"></div>
         <div id="keysProviders"
@@ -518,19 +733,21 @@
             <div class="card-title">➕ Nouveau projet</div>
             <div class="flex-col">
               <input id="projectName" placeholder="Nom projet (ex: claude-code)" />
-              <div class="grid-2">
+              <div>
                 <input id="projectDailyLimit" type="number" min="0" placeholder="Quota / jour" style="width:auto" />
-                <select id="projectPolicy" style="width:auto">
-                  <option value="full_access">full_access</option>
-                  <option value="coding_only">coding_only</option>
-                </select>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px">Profils autorises</div>
+                <div id="newProjectProfileCheckboxes" class="flex-row" style="flex-wrap:wrap; gap:8px">
+                  <!-- Profiles loaded dynamically from API -->
+                </div>
               </div>
               <select id="projectQuotaMode" style="width:auto">
                 <option value="hard_block">hard_block (429)</option>
                 <option value="local_only">local_only (fallback local)</option>
                 <option value="alert_only">alert_only (alerte seulement)</option>
               </select>
-              <button class="primary" onclick="createProjectFromForm()">Créer token projet</button>
+              <button class="primary" onclick="createProjectFromForm()">Creer token projet</button>
             </div>
           </div>
           <div class="card"
@@ -559,6 +776,77 @@
 
         <div id="projectsStatus" class="status-line"></div>
         <div id="projectsList" class="flex-col"></div>
+
+        <!-- Project Detail View (hidden by default) -->
+        <div id="projectDetail" style="display:none">
+          <button class="ghost" onclick="showProjectsList()" style="margin-bottom:12px">&larr; Retour a la liste</button>
+          <div class="card" style="padding:20px">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px">
+              <div>
+                <h2 id="projectDetailName" style="margin:0; font-size:22px; font-weight:700"></h2>
+                <span id="projectDetailStatus" class="badge"></span>
+              </div>
+              <div class="flex-row" style="gap:8px">
+                <button onclick="showEditProjectModal()">Modifier</button>
+                <button class="danger" onclick="deleteProjectFromDetail()">Supprimer</button>
+              </div>
+            </div>
+            <div class="grid-3" style="margin-bottom:20px">
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Token</div>
+                <div id="projectDetailToken" class="mono" style="font-size:12px; word-break:break-all"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Quota Mode</div>
+                <div id="projectDetailQuotaMode" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Quota Journalier</div>
+                <div id="projectDetailDailyLimit" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Rate Limit (RPM)</div>
+                <div id="projectDetailRateLimit" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Max Cost ($/jour)</div>
+                <div id="projectDetailMaxCost" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Profils Autorises</div>
+                <div id="projectDetailAllowedProfiles" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Provider Force</div>
+                <div id="projectDetailForcedProvider" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Cree le</div>
+                <div id="projectDetailCreated" style="font-size:14px"></div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase">Mis a jour</div>
+                <div id="projectDetailUpdated" style="font-size:14px"></div>
+              </div>
+            </div>
+            <div style="margin-bottom:16px">
+              <div class="flex-row" style="align-items:center; gap:12px; margin-bottom:12px">
+                <div style="font-size:14px; font-weight:600">Historique d'utilisation</div>
+                <select id="projectUsageRange" onchange="loadProjectUsage()" style="width:140px; font-size:12px">
+                  <option value="7">7 derniers jours</option>
+                  <option value="30" selected>30 derniers jours</option>
+                </select>
+              </div>
+              <canvas id="projectUsageChart" style="max-height:200px"></canvas>
+              <div id="projectUsageTotal" style="margin-top:12px; font-size:13px; color:var(--text-dim)"></div>
+            </div>
+            <div class="flex-row" style="gap:8px">
+              <button onclick="copyProjectToken()">Copier token</button>
+              <button onclick="launchClaudeWithProject()">Ouvrir Claude Code</button>
+              <button id="projectRevokeBtn" class="danger" onclick="revokeProjectFromDetail()">Revoquer token</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ══════════ CLAUDE CODE ══════════ -->
@@ -1182,6 +1470,12 @@
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
               <input id="ollamaSearch" placeholder="Rechercher un modèle..." style="flex:1; min-width:200px; width:auto"
                 oninput="filterOllamaModels()" />
+              <select id="ollamaSort" onchange="filterOllamaModels()" style="width:150px">
+                <option value="recent">⭐ Plus récent</option>
+                <option value="popular">⭐ Plus populaires</option>
+                <option value="name-asc">Nom A → Z</option>
+                <option value="name-desc">Nom Z → A</option>
+              </select>
               <select id="ollamaFilterType" onchange="filterOllamaModels()" style="width:140px">
                 <option value="">Tous les types</option>
                 <option value="cloud">☁️ Cloud</option>
@@ -1236,6 +1530,153 @@
           </div>
           <div id="localModelGrid"
             style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px"></div>
+        </div>
+      </div>
+
+      <!-- ══════════ MES PROFILS & CATALOGUE ══════════ -->
+      <div id="tab-myprofiles" class="section top-section">
+        <div class="page-header">
+          <div class="page-title">Mon Catalogue & Profils</div>
+          <div class="page-desc">Gérez vos profils personnalisés et les modèles associés</div>
+        </div>
+
+        <!-- Custom Profiles -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+            <div style="font-weight:600; font-size:14px">🎭 Profils personnalisés</div>
+            <button class="primary" onclick="openNewProfileForm()" style="font-size:12px; padding:5px 12px">+ Nouveau profil</button>
+          </div>
+
+          <!-- New Profile Form -->
+          <div id="newProfileForm" style="display:none; background:var(--surface-alt,var(--bg)); border:1px solid var(--border); border-radius:var(--r-md); padding:14px; margin-bottom:14px">
+            <div style="font-weight:600; font-size:13px; margin-bottom:10px">Créer un profil</div>
+            <div style="display:flex; flex-direction:column; gap:10px">
+              <!-- Profile Name -->
+              <div>
+                <label style="font-size:12px; font-weight:500; display:block; margin-bottom:3px">Nom du profil *</label>
+                <input id="newProfileName" placeholder="ex: my-coding, research-fast" style="width:100%" />
+                <div style="font-size:10px; color:var(--text-dim); margin-top:2px">Minuscules, 2-30 chars, lettres/chiffres/tirets</div>
+              </div>
+
+              <!-- Tags -->
+              <div>
+                <label style="font-size:12px; font-weight:500; display:block; margin-bottom:3px">Tags (plusieurs possibles)</label>
+                <div id="newProfileTagsContainer" style="display:flex; flex-wrap:wrap; gap:8px; padding:8px; background:var(--surface); border-radius:6px">
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="coding"> 💻 coding
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="reasoning"> 🧠 reasoning
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="chat"> 💬 chat
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="vision"> 👁️ vision
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="fast"> ⚡ fast
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="cheap"> 💰 cheap
+                  </label>
+                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer">
+                    <input type="checkbox" class="tag-checkbox" value="multi-purpose"> 🌟 multi-purpose
+                  </label>
+                </div>
+                <div style="font-size:10px; color:var(--text-dim); margin-top:4px">Si 1 seul tag → "only" sera ajouté automatiquement</div>
+              </div>
+
+              <!-- Description -->
+              <div>
+                <label style="font-size:12px; font-weight:500; display:block; margin-bottom:3px">Description</label>
+                <input id="newProfileDesc" placeholder="Mon profil pour..." style="width:100%" />
+              </div>
+
+              <!-- Provider -->
+              <div>
+                <label style="font-size:12px; font-weight:500; display:block; margin-bottom:3px">Provider</label>
+                <select id="newProfileProvider" onchange="onProviderChanged()" style="width:100%; padding:8px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border)">
+                  <option value="">Sélectionner un provider...</option>
+                </select>
+              </div>
+
+              <!-- Model -->
+              <div>
+                <label style="font-size:12px; font-weight:500; display:block; margin-bottom:3px">Modèle</label>
+                <div style="display:flex; gap:8px; margin-bottom:8px">
+                  <select id="newProfileModel" style="flex:1; padding:8px; border-radius:6px; background:var(--bg); color:var(--text); border:1px solid var(--border)">
+                    <option value="">Sélectionner un provider d'abord...</option>
+                  </select>
+                  <button class="primary" onclick="addNewProfileModel()">+ Ajouter</button>
+                </div>
+                <div id="newProfileModelsList" style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-muted)"></div>
+                <div style="font-size:10px; color:var(--text-dim); margin-top:6px">Ajoutez des modèles dans l'ordre de rotation souhaité</div>
+              </div>
+
+              <div id="newProfileStatus" style="font-size:12px; min-height:18px"></div>
+              <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button onclick="closeNewProfileForm()">Annuler</button>
+                <button class="primary" onclick="createCustomProfile()">✅ Créer le profil</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Builtin Profiles -->
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600">Profils système (non modifiables)</div>
+            <div id="builtinProfilesList" style="display:flex; gap:6px; flex-wrap:wrap"></div>
+          </div>
+
+          <!-- Custom Profiles List -->
+          <div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600">Vos profils</div>
+            <div id="customProfilesList" class="flex-col" style="gap:8px"></div>
+          </div>
+        </div>
+
+        <!-- My Models - Database -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+            <div style="font-weight:600; font-size:14px">📦 Mes Modèles (Source de vérité)</div>
+            <button class="ghost" onclick="loadMyModels()" style="font-size:11px; padding:4px 10px">↺ Actualiser</button>
+          </div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Tous les modèles disponibles dans la base de données - classés par providers ou par profils</div>
+
+          <!-- View Toggle -->
+          <div class="subtabs" style="margin-bottom:14px">
+            <button class="subtab" id="mymodels-view-providers" onclick="showMyModelsView('providers')">📦 Par Providers</button>
+            <button class="subtab active" id="mymodels-view-profiles" onclick="showMyModelsView('profiles')">📋 Par Profils</button>
+          </div>
+
+          <!-- Summary -->
+          <div id="mymodels-summary" class="card" style="margin-bottom:14px; display:flex; gap:16px; flex-wrap:wrap; padding:12px">
+          </div>
+
+          <!-- By Providers View -->
+          <div id="mymodels-providers-view" class="mymodels-view" style="display:none">
+            <div id="mymodels-providers-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px">
+            </div>
+          </div>
+
+          <!-- By Profiles View -->
+          <div id="mymodels-profiles-view" class="mymodels-view">
+            <div id="mymodels-profiles-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px">
+            </div>
+          </div>
+
+          <!-- Model Detail Modal -->
+          <div id="mymodels-detail-modal" class="modal" style="display:none">
+            <div class="modal-backdrop" onclick="closeMyModelsModal()"></div>
+            <div class="modal-content" style="max-width:500px">
+              <div class="modal-header">
+                <span class="modal-title" id="mymodels-detail-title">Détails du modèle</span>
+                <button class="modal-close" onclick="closeMyModelsModal()">×</button>
+              </div>
+              <div class="modal-body" id="mymodels-detail-body">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2090,6 +2531,75 @@ Jours  : all</pre>
     </div>
   </div>
 
+  <!-- Edit Project Modal -->
+  <div class="modal" id="editProjectModal">
+    <div class="modal-box" style="width:min(600px,90vw)">
+      <div class="modal-header">
+        <div class="modal-title">Modifier le projet</div>
+        <button class="ghost" onclick="closeEditProjectModal()">✕ Fermer</button>
+      </div>
+      <div class="modal-body" style="padding:16px">
+        <div class="flex-col" style="gap:12px">
+          <div>
+            <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Nom du projet</label>
+            <input id="editProjectName" placeholder="Nom projet" style="width:100%" />
+          </div>
+          <div class="grid-2">
+            <div>
+              <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Quota quotidien</label>
+              <input id="editProjectDailyLimit" type="number" min="0" placeholder="Illimite si vide" style="width:100%" />
+              <label style="font-size:11px; color:var(--text-muted)">
+                <input type="checkbox" id="editProjectNoLimit" onchange="toggleNoLimit()" /> Pas de limite
+              </label>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Rate Limit (RPM)</label>
+              <input id="editProjectRateLimit" type="number" min="1" placeholder="Illimite si vide" style="width:100%" />
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Max Cost ($/jour)</label>
+              <input id="editProjectMaxCost" type="number" min="0" step="0.01" placeholder="Illimite si vide" style="width:100%" />
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Profils autorises</label>
+            <div id="editProjectProfileCheckboxes" class="flex-row" style="flex-wrap:wrap; gap:12px; margin-top:4px">
+              <!-- Profiles loaded dynamically -->
+            </div>
+              </label>
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:4px">Cochez les profils autorises (aucun = tous)</div>
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Provider force</label>
+            <select id="editProjectForcedProvider" style="width:100%">
+              <option value="">Auto (Aucun)</option>
+              <option value="local">local</option>
+              <option value="ollama_cloud">ollama_cloud</option>
+              <option value="nvidia">nvidia</option>
+              <option value="openrouter">openrouter</option>
+              <option value="google">google</option>
+              <option value="openai">openai</option>
+              <option value="anthropic">anthropic</option>
+              <option value="custom">custom</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px">Quota Mode</label>
+            <select id="editProjectQuotaMode" style="width:100%">
+              <option value="hard_block">hard_block (retourne 429)</option>
+              <option value="local_only">local_only (fallback local)</option>
+              <option value="alert_only">alert_only (alerte seulement)</option>
+            </select>
+          </div>
+          <button class="primary" onclick="saveProjectChanges()" style="margin-top:8px">Enregistrer les modifications</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="lockModal">
     <div class="modal-box">
       <div class="modal-header">
@@ -2115,6 +2625,75 @@ Jours  : all</pre>
     </div>
   </div>
 
+  <!-- Profile Models Modal -->
+  <div class="modal" id="profileModelsModal">
+    <div class="modal-box" style="max-width:640px">
+      <div class="modal-header">
+        <div class="modal-title" id="profileModelsTitle">Profil</div>
+        <button class="ghost" onclick="closeProfileModelsModal()">✕ Fermer</button>
+      </div>
+      <div id="profileModelsBody" style="max-height:70vh; overflow-y:auto; padding:8px 0"></div>
+    </div>
+  </div>
+
+  <!-- Add Provider Modal -->
+  <div class="modal" id="addProviderModal">
+    <div class="modal-box" style="width:min(520px,90vw)">
+      <div class="modal-header">
+        <div class="modal-title">➕ Ajouter un provider</div>
+        <button class="modal-close" onclick="closeAddProviderModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding:16px">
+        <div class="flex-col" style="gap:12px">
+          <div>
+            <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:500">Nom du provider</label>
+            <input id="addProviderName" placeholder="ex: mistral, grok, deepseek" style="width:100%" />
+            <div style="font-size:11px; color:var(--text-dim); margin-top:2px">Nom unique (minuscules, sans espace)</div>
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:500">Base URL</label>
+            <input id="addProviderBaseUrl" placeholder="https://api.mistral.ai/v1" style="width:100%" />
+            <div style="font-size:11px; color:var(--text-dim); margin-top:2px">Endpoint de l'API (doit commencer par http:// ou https://)</div>
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:500">Clé API</label>
+            <input id="addProviderApiKey" type="password" placeholder="sk-..." style="width:100%" />
+          </div>
+          <div>
+            <label style="display:block; margin-bottom:4px; font-size:13px; font-weight:500">Label (optionnel)</label>
+            <input id="addProviderLabel" placeholder="Mon compte Mistral" style="width:100%" />
+          </div>
+          <div id="addProviderStatus" class="status-line" style="margin-top:8px"></div>
+          <button class="primary" style="margin-top:8px" onclick="addProvider()">➕ Ajouter le provider</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Fallback functions in case cached JS is used
+  function openAddProviderModal() {
+    var modal = document.getElementById('addProviderModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      var nameInput = document.getElementById('addProviderName');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
+      var baseUrlInput = document.getElementById('addProviderBaseUrl');
+      if (baseUrlInput) baseUrlInput.value = '';
+      var apiKeyInput = document.getElementById('addProviderApiKey');
+      if (apiKeyInput) apiKeyInput.value = '';
+      var labelInput = document.getElementById('addProviderLabel');
+      if (labelInput) labelInput.value = '';
+      var statusEl = document.getElementById('addProviderStatus');
+      if (statusEl) statusEl.textContent = '';
+    }
+  }
+  function closeAddProviderModal() {
+    var modal = document.getElementById('addProviderModal');
+    if (modal) modal.style.display = 'none';
+  }
+  </script>
+
   <script src="/static/js/state.js"></script>
   <script src="/static/js/tabs.js"></script>
   <script src="/static/js/helpers.js"></script>
@@ -2128,6 +2707,495 @@ Jours  : all</pre>
       style="color:inherit">Ivanor1st</a>
   </footer>
   <script src="/static/js/copilot.js"></script>
+
+  <!-- Mes Modèles Tab JavaScript -->
+  <script>
+  // New Profile Form Functions (inline to avoid caching issues)
+  // Note: newProfileProviders and newProfileModels are declared in helpers.js
+  newProfileProviders = [];
+  newProfileModels = [];
+
+  async function openNewProfileForm() {
+    document.getElementById('newProfileForm').style.display = 'block';
+
+    // Reset form
+    document.getElementById('newProfileName').value = '';
+    document.getElementById('newProfileDesc').value = '';
+    document.getElementById('newProfileProvider').value = '';
+    document.getElementById('newProfileModel').innerHTML = '<option value="">Sélectionner un provider d\'abord...</option>';
+    // Reset tag checkboxes
+    document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = false);
+    newProfileModels = [];
+    renderNewProfileModels();
+    document.getElementById('newProfileStatus').innerHTML = '';
+
+    // Load providers from database
+    try {
+      const data = await api('/api/db/providers');
+      newProfileProviders = data.providers || data || [];
+
+      // Populate provider dropdown
+      const providerSelect = document.getElementById('newProfileProvider');
+      providerSelect.innerHTML = '<option value="">Sélectionner un provider...</option>' +
+        newProfileProviders.map(p => `<option value="${p.name}">${p.display_name || p.name}</option>`).join('');
+    } catch (err) {
+      console.error('Error loading providers:', err);
+    }
+  }
+
+  function closeNewProfileForm() {
+    document.getElementById('newProfileForm').style.display = 'none';
+  }
+
+  async function onProviderChanged() {
+    const provider = document.getElementById('newProfileProvider').value;
+    const modelSelect = document.getElementById('newProfileModel');
+
+    if (!provider) {
+      modelSelect.innerHTML = '<option value="">Sélectionner un provider d\'abord...</option>';
+      return;
+    }
+
+    modelSelect.innerHTML = '<option value="">Chargement...</option>';
+
+    try {
+      const data = await api('/api/db/models');
+      const allModels = data.models || data || [];
+      const providerModels = allModels.filter(m => m.provider_name === provider);
+
+      if (providerModels.length === 0) {
+        modelSelect.innerHTML = '<option value="">Aucun modèle pour ce provider</option>';
+        return;
+      }
+
+      modelSelect.innerHTML = '<option value="">Sélectionner un modèle...</option>' +
+        providerModels.map(m => `<option value="${m.name}" data-provider="${m.provider_name}">${m.display_name || m.name}</option>`).join('');
+    } catch (err) {
+      console.error('Error loading models:', err);
+      modelSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+    }
+  }
+
+  function addNewProfileModel() {
+    const modelSelect = document.getElementById('newProfileModel');
+    const providerSelect = document.getElementById('newProfileProvider');
+
+    const model = modelSelect.value;
+    const provider = providerSelect.value;
+
+    if (!model || !provider) {
+      return;
+    }
+
+    if (newProfileModels.some(m => (m.model || m) === model)) {
+      modelSelect.value = '';
+      return;
+    }
+
+    newProfileModels.push({ model: model, provider: provider });
+    modelSelect.value = '';
+    renderNewProfileModels();
+  }
+
+  function removeNewProfileModel(index) {
+    newProfileModels.splice(index, 1);
+    renderNewProfileModels();
+  }
+
+  function renderNewProfileModels() {
+    const el = document.getElementById('newProfileModelsList');
+    if (!el) return;
+    if (newProfileModels.length === 0) {
+      el.innerHTML = '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle ajouté</div>';
+      return;
+    }
+    el.innerHTML = newProfileModels.map((m, i) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:6px 8px; border-radius:6px">
+        <div style="display:flex; align-items:center; gap:8px">
+          <span style="color:var(--text-muted); font-size:11px">${i+1}.</span>
+          <span style="font-family:var(--font-mono); color:var(--text)">${m.model || m}</span>
+          ${m.provider ? `<span style="font-size:10px; color:var(--text-dim)">(${m.provider})</span>` : ''}
+        </div>
+        <div style="display:flex; gap:8px"><button class="ghost" onclick="removeNewProfileModel(${i})">✕</button></div>
+      </div>
+    `).join('');
+  }
+
+  async function createCustomProfile() {
+    const nameEl = document.getElementById('newProfileName');
+    const descEl = document.getElementById('newProfileDesc');
+    const statusEl = document.getElementById('newProfileStatus');
+
+    const name = (nameEl?.value || '').trim().toLowerCase();
+    const desc = (descEl?.value || '').trim();
+
+    // Get selected tags from checkboxes
+    const checkedTags = Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(cb => cb.value);
+
+    // If 1 tag → add "only" prefix, if multiple → keep as is
+    let tags = [];
+    if (checkedTags.length === 1) {
+      tags = [checkedTags[0] + ' only'];
+    } else if (checkedTags.length > 1) {
+      tags = checkedTags;
+    }
+
+    if (!name) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">❌ Le nom est requis.</span>';
+      return;
+    }
+
+    if (!/^[a-z0-9-]{2,30}$/.test(name)) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">❌ Nom invalide. Utilisez lettres minuscules, chiffres et tirets (2-30 chars).</span>';
+      return;
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-dim)">⏳ Création...</span>';
+
+    try {
+      const models = newProfileModels.map(m => ({
+        model: m.model || m,
+        provider: m.provider || null
+      }));
+
+      const payload = {
+        name,
+        description: desc,
+        tags: tags,
+        models
+      };
+
+      await api('/api/profiles/custom', 'POST', payload);
+
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✅ Profil créé !</span>';
+      closeNewProfileForm();
+      await loadCustomProfiles();
+    } catch (err) {
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">❌ ${err.message || 'Erreur'}</span>`;
+    }
+  }
+
+  // My Models Data Cache
+  let myModelsData = {
+    providers: [],
+    profiles: [],
+    models: [],
+    routing: {}
+  };
+
+  // Current view
+  let myModelsCurrentView = 'profiles';
+
+  // Load my models data from API
+  async function loadMyModels() {
+    const statusEl = document.getElementById('mymodelsStatus');
+    if (statusEl) statusEl.textContent = 'Chargement...';
+
+    try {
+      // Fetch all data in parallel using the api function
+      const [providersData, profilesData, modelsData] = await Promise.all([
+        api('/api/db/providers'),
+        api('/api/db/profiles'),
+        api('/api/db/models')
+      ]);
+
+      myModelsData.providers = providersData.providers || providersData || [];
+      myModelsData.profiles = profilesData.profiles || profilesData || [];
+      myModelsData.models = modelsData.models || modelsData || [];
+
+      // Load routing for each profile
+      for (const profile of myModelsData.profiles) {
+        const routingData = await api(`/api/db/routing/${profile.name}`);
+        myModelsData.routing[profile.name] = routingData.routing || [];
+      }
+
+      // Render the view
+      renderMyModels();
+
+      if (statusEl) statusEl.textContent = `✓ ${myModelsData.models.length} modèles chargés`;
+    } catch (err) {
+      console.error('Error loading my models:', err);
+      if (statusEl) statusEl.textContent = 'Erreur: ' + err.message;
+    }
+  }
+
+  // Render the current view
+  function renderMyModels() {
+    renderMyModelsSummary();
+
+    if (myModelsCurrentView === 'providers') {
+      renderMyModelsByProviders();
+    } else {
+      renderMyModelsByProfiles();
+    }
+  }
+
+  // Render summary cards
+  function renderMyModelsSummary() {
+    const container = document.getElementById('mymodels-summary');
+    if (!container) return;
+
+    const providerCount = myModelsData.providers.length;
+    const profileCount = myModelsData.profiles.length;
+    const modelCount = myModelsData.models.length;
+
+    // Count custom models
+    const customCount = myModelsData.models.filter(m => m.is_custom).length;
+
+    container.innerHTML = `
+      <div style="flex:1; min-width:120px">
+        <div style="font-size:24px; font-weight:700; color:var(--accent)">${providerCount}</div>
+        <div style="font-size:12px; color:var(--text-dim)">Providers</div>
+      </div>
+      <div style="flex:1; min-width:120px">
+        <div style="font-size:24px; font-weight:700; color:var(--accent)">${profileCount}</div>
+        <div style="font-size:12px; color:var(--text-dim)">Profils</div>
+      </div>
+      <div style="flex:1; min-width:120px">
+        <div style="font-size:24px; font-weight:700; color:var(--accent)">${modelCount}</div>
+        <div style="font-size:12px; color:var(--text-dim)">Modèles total</div>
+      </div>
+      <div style="flex:1; min-width:120px">
+        <div style="font-size:24px; font-weight:700; color:var(--green)">${customCount}</div>
+        <div style="font-size:12px; color:var(--text-dim)">Modèles custom</div>
+      </div>
+    `;
+  }
+
+  // Render models by providers
+  function renderMyModelsByProviders() {
+    const container = document.getElementById('mymodels-providers-grid');
+    if (!container) return;
+
+    const providersView = document.getElementById('mymodels-providers-view');
+    const profilesView = document.getElementById('mymodels-profiles-view');
+    if (providersView) providersView.style.display = 'block';
+    if (profilesView) profilesView.style.display = 'none';
+
+    // Group models by provider
+    const modelsByProvider = {};
+    for (const provider of myModelsData.providers) {
+      modelsByProvider[provider.name] = myModelsData.models.filter(m => m.provider_name === provider.name);
+    }
+
+    container.innerHTML = myModelsData.providers.map(provider => {
+      const models = modelsByProvider[provider.name] || [];
+      const displayName = provider.display_name || provider.name;
+
+      // Get provider icon/color
+      const providerInfo = getProviderInfo(provider.name);
+
+      return `
+        <div class="card" style="margin-bottom:0">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+            <span style="font-size:20px">${providerInfo.icon}</span>
+            <div>
+              <div style="font-weight:700; font-size:14px">${displayName}</div>
+              <div style="font-size:11px; color:var(--text-dim)">${models.length} modèles</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px">
+            ${models.length === 0 ? '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle</div>' : ''}
+            ${models.slice(0, 5).map(model => `
+              <div onclick="showMyModelsDetail(${model.id})" style="cursor:pointer; padding:6px 8px; background:var(--bg-dim); border-radius:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px">${model.display_name || model.name}</span>
+                ${model.is_custom ? '<span style="font-size:10px; background:var(--accent-dim); padding:2px 6px; border-radius:4px">CUSTOM</span>' : ''}
+              </div>
+            `).join('')}
+            ${models.length > 5 ? `<div style="font-size:11px; color:var(--text-muted); margin-top:4px">+${models.length - 5} autres</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Render models by profiles
+  function renderMyModelsByProfiles() {
+    const container = document.getElementById('mymodels-profiles-grid');
+    if (!container) return;
+
+    const providersView = document.getElementById('mymodels-providers-view');
+    const profilesView = document.getElementById('mymodels-profiles-view');
+    if (providersView) providersView.style.display = 'none';
+    if (profilesView) profilesView.style.display = 'block';
+
+    container.innerHTML = myModelsData.profiles.map(profile => {
+      const routing = myModelsData.routing[profile.name] || [];
+      const displayName = profile.display_name || profile.name;
+
+      // Get profile icon
+      const profileInfo = getProfileInfo(profile.name);
+
+      return `
+        <div class="card" style="margin-bottom:0">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+            <span style="font-size:20px">${profileInfo.icon}</span>
+            <div>
+              <div style="font-weight:700; font-size:14px">${displayName}</div>
+              <div style="font-size:11px; color:var(--text-dim)">${routing.length} modèles dans la chaîne</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px">
+            ${routing.length === 0 ? '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle</div>' : ''}
+            ${routing.map((item, idx) => `
+              <div onclick="showMyModelsDetailByName('${item.model}', '${item.provider}')" style="cursor:pointer; padding:6px 8px; background:var(--bg-dim); border-radius:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center">
+                <div style="display:flex; align-items:center; gap:8px">
+                  <span style="color:var(--text-muted); min-width:16px">${idx + 1}.</span>
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px">${item.model}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px">
+                  ${item.is_suspended ? '<span style="font-size:10px; background:var(--red-dim); padding:2px 6px; border-radius:4px">OFF</span>' : ''}
+                  ${item.is_default ? '<span style="font-size:10px; background:var(--accent-dim); padding:2px 6px; border-radius:4px">DEFAULT</span>' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Show model detail by ID
+  function showMyModelsDetail(modelId) {
+    const model = myModelsData.models.find(m => m.id === modelId);
+    if (!model) return;
+
+    showMyModelsDetailModal(model);
+  }
+
+  // Show model detail by name and provider
+  function showMyModelsDetailByName(modelName, providerName) {
+    const model = myModelsData.models.find(m => m.name === modelName && m.provider_name === providerName);
+    if (!model) return;
+
+    showMyModelsDetailModal(model);
+  }
+
+  // Show model detail modal
+  function showMyModelsDetailModal(model) {
+    const modal = document.getElementById('mymodels-detail-modal');
+    const title = document.getElementById('mymodels-detail-title');
+    const body = document.getElementById('mymodels-detail-body');
+
+    if (!modal || !title || !body) return;
+
+    // Find which profiles this model belongs to
+    const profiles = [];
+    for (const [profileName, routing] of Object.entries(myModelsData.routing)) {
+      const inRouting = routing.find(r => r.model === model.name && r.provider === model.provider_name);
+      if (inRouting) {
+        profiles.push({ name: profileName, order: inRouting.order, suspended: inRouting.is_suspended });
+      }
+    }
+
+    const providerInfo = getProviderInfo(model.provider_name);
+
+    title.textContent = model.display_name || model.name;
+    body.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <div>
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px">Provider</div>
+          <div style="display:flex; align-items:center; gap:8px">
+            <span style="font-size:18px">${providerInfo.icon}</span>
+            <span>${model.provider_name}</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px">Nom du modèle</div>
+          <div style="font-family:monospace; font-size:13px; background:var(--bg-dim); padding:8px; border-radius:6px; word-break:break-all">${model.name}</div>
+        </div>
+        ${model.display_name ? `
+        <div>
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px">Nom d'affichage</div>
+          <div>${model.display_name}</div>
+        </div>
+        ` : ''}
+        <div>
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px">Profils associés</div>
+          ${profiles.length === 0 ? '<div style="color:var(--text-muted)">Aucun profil</div>' : ''}
+          <div style="display:flex; flex-direction:column; gap:6px">
+            ${profiles.map(p => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:var(--bg-dim); border-radius:6px">
+                <span>${p.name}</span>
+                <div style="display:flex; gap:6px">
+                  <span style="font-size:10px; color:var(--text-muted)">#${p.order}</span>
+                  ${p.suspended ? '<span style="font-size:10px; background:var(--red-dim); padding:2px 6px; border-radius:4px">OFF</span>' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px">
+          ${model.is_custom ? '<span style="font-size:11px; background:var(--accent-dim); padding:4px 10px; border-radius:20px">Custom</span>' : '<span style="font-size:11px; background:var(--bg-dim); padding:4px 10px; border-radius:20px">Default</span>'}
+          ${model.context_window ? `<span style="font-size:11px; background:var(--bg-dim); padding:4px 10px; border-radius:20px">${model.context_window.toLocaleString()} ctx</span>` : ''}
+          ${model.supports_vision ? '<span style="font-size:11px; background:var(--green-dim); padding:4px 10px; border-radius:20px">Vision</span>' : ''}
+          ${model.supports_audio ? '<span style="font-size:11px; background:var(--blue-dim); padding:4px 10px; border-radius:20px">Audio</span>' : ''}
+        </div>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  }
+
+  // Close modal
+  function closeMyModelsModal() {
+    const modal = document.getElementById('mymodels-detail-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  // Switch view
+  function showMyModelsView(view) {
+    myModelsCurrentView = view;
+
+    // Update tab buttons
+    document.getElementById('mymodels-view-providers').classList.toggle('active', view === 'providers');
+    document.getElementById('mymodels-view-profiles').classList.toggle('active', view === 'profiles');
+
+    // Re-render
+    if (myModelsData.models.length > 0) {
+      renderMyModels();
+    }
+  }
+
+  // Helper: Get provider info
+  function getProviderInfo(providerName) {
+    const providers = {
+      'ollama_cloud': { icon: '☁️', color: '#orange' },
+      'local': { icon: '💻', color: '#green' },
+      'nvidia': { icon: '🟢', color: '#76b900' },
+      'openrouter': { icon: '🔀', color: '#orange' },
+      'google': { icon: '🔵', color: '#4285f4' },
+      'openai': { icon: '⚫', color: '#10a37f' },
+      'anthropic': { icon: '🟠', color: '#d97757' },
+      'custom': { icon: '⚙️', color: '#gray' }
+    };
+    return providers[providerName] || { icon: '📦', color: '#gray' };
+  }
+
+  // Helper: Get profile info
+  function getProfileInfo(profileName) {
+    const profiles = {
+      'coding': { icon: '💻' },
+      'reasoning': { icon: '🧠' },
+      'chat': { icon: '💬' },
+      'long': { icon: '📚' },
+      'vision': { icon: '👁️' },
+      'audio': { icon: '🎧' },
+      'translate': { icon: '🌍' }
+    };
+    return profiles[profileName] || { icon: '📋' };
+  }
+
+  // Auto-load when tab is shown
+  const originalShowTab = window.showTab;
+  window.showTab = function(name) {
+    if (originalShowTab) originalShowTab(name);
+    if ((name === 'myprofiles' || name === 'mymodels') && myModelsData.models.length === 0) {
+      loadMyModels();
+    }
+  };
+  </script>
+
 </body>
 
 </html>
