@@ -92,7 +92,34 @@ try {
     switch ($args[0].ToLower()) {
         "start" { Start-Proxy }
         "stop" { Stop-Proxy -Force:($args[1] -eq "--force") }
-        "restart" { Stop-Proxy; Start-Proxy }
+        "restart" {
+            # Call the API endpoint which creates a backup before restarting
+            Write-Host "Creating backup and restarting..." -ForegroundColor Yellow
+            try {
+                # Call the restart endpoint - it will create backup and spawn new process
+                # Use a timeout since the process will exit after starting the new one
+                $null = Invoke-RestMethod -Uri "$Base/api/restart" -Method POST -TimeoutSec 5 -ErrorAction SilentlyContinue
+            } catch {
+                # Expected to fail because the process exits after spawning new one
+            }
+            # Wait for the new process to start
+            Write-Host "Waiting for server to restart..." -ForegroundColor Cyan
+            Start-Sleep -Seconds 3
+            # Check if server is back up
+            $attempts = 0
+            while ($attempts -lt 10) {
+                try {
+                    $status = Invoke-RestMethod -Uri "$Base/api/status" -TimeoutSec 2 -ErrorAction SilentlyContinue
+                    if ($status) {
+                        Write-Host "Server restarted successfully!" -ForegroundColor Green
+                        return
+                    }
+                } catch {}
+                Start-Sleep -Seconds 1
+                $attempts++
+            }
+            Write-Host "Warning: Could not verify server status after restart" -ForegroundColor Yellow
+        }
         "status" {
             $status = Invoke-RotatorApi -Path "/api/status"
             Write-Host "Mode: $($status.mode)  Paused: $($status.paused)" -ForegroundColor Cyan

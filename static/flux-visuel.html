@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Flux Visuel · API Rotator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg:         #02040e;
+  --surface:    #060b18;
+  --surface-2:  #0a1020;
+  --surface-3:  #101828;
+  --border:     #172035;
+  --border-dim: #0d1525;
+
+  --green:      #00ff88;
+  --green-g:    rgba(0,255,136,.45);
+  --green-dim:  rgba(0,255,136,.07);
+
+  --amber:      #f59e0b;
+  --amber-g:    rgba(245,158,11,.4);
+  --amber-dim:  rgba(245,158,11,.07);
+
+  --red:        #ff3355;
+  --red-g:      rgba(255,51,85,.4);
+  --red-dim:    rgba(255,51,85,.07);
+
+  --blue:       #38bdf8;
+  --blue-g:     rgba(56,189,248,.35);
+  --blue-dim:   rgba(56,189,248,.07);
+
+  --purple:     #a78bfa;
+
+  --text:       #c5d4ec;
+  --t2:         #6d849e;
+  --t3:         #3a4e67;
+  --t4:         #1c2b3e;
+
+  --ff: 'Syne', sans-serif;
+  --mo: 'JetBrains Mono', monospace;
+}
+
+html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--mo); overflow:hidden; }
+
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,255,136,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,.02) 1px, transparent 1px);
+  background-size:48px 48px;
+}
+body::after {
+  content:''; position:fixed; top:50%; left:40%; transform:translate(-50%,-50%);
+  width:1000px; height:700px; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse, rgba(0,255,136,.028) 0%, transparent 66%);
+}
+
+/* ════ PAGE SHELL ════ */
+.page {
+  position:relative; z-index:1;
+  display:grid; grid-template-rows:54px 1fr 40px;
+  height:100vh;
+}
+
+/* ════ HEADER ════ */
+.hdr {
+  display:flex; align-items:center; gap:14px;
+  padding:0 20px;
+  border-bottom:1px solid var(--border);
+  background:rgba(2,4,14,.94);
+  backdrop-filter:blur(18px);
+}
+.back-btn {
+  display:flex; align-items:center; gap:5px;
+  padding:5px 10px; border-radius:7px;
+  background:var(--surface-2); border:1px solid var(--border);
+  color:var(--t2); font-family:var(--mo); font-size:11px;
+  cursor:pointer; text-decoration:none; transition:all .2s;
+}
+.back-btn:hover { color:var(--green); border-color:var(--green); box-shadow:0 0 10px var(--green-dim); }
+.hdiv { width:1px; height:22px; background:var(--border); flex-shrink:0; }
+.proj-lbl  { font-size:9px; color:var(--t3); text-transform:uppercase; letter-spacing:.15em; }
+.proj-name { font-family:var(--ff); font-size:15px; font-weight:700; color:var(--text); }
+.proj-badge { display:flex; align-items:center; gap:7px; }
+.token-pill { font-size:9px; padding:3px 9px; border-radius:12px; border:1px solid var(--border); color:var(--t3); }
+.live-ind { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--green); }
+.live-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 7px var(--green-g);
+  animation:blink 2s ease-in-out infinite;
+}
+@keyframes blink {
+  0%,100%{ opacity:1; box-shadow:0 0 7px var(--green-g); }
+  50%    { opacity:.5; box-shadow:0 0 3px var(--green-g); }
+}
+.hdr-sp { flex:1; }
+.stat-row { display:flex; gap:14px; font-size:10px; color:var(--t3); }
+.stat-row span { color:var(--t2); }
+.mode-toggle { display:flex; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--surface-2); }
+.zoom-controls { display:flex; align-items:center; gap:4px; margin-left:8px; }
+.zm-btn {
+  width:24px; height:24px; border-radius:5px;
+  border:1px solid var(--border); background:var(--surface-2);
+  color:var(--t2); font-size:14px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .2s;
+}
+.zm-btn:hover { background:var(--surface-3); color:var(--green); border-color:var(--green); }
+.zm-level { font-size:10px; color:var(--t3); min-width:36px; text-align:center; font-family:var(--mo); }
+.mbtn { padding:5px 13px; background:none; border:none; color:var(--t3); font-family:var(--mo); font-size:10px; cursor:pointer; transition:all .2s; letter-spacing:.04em; }
+.mbtn.on        { background:var(--surface-3); color:var(--green); }
+.mbtn.on.manual { color:var(--amber); }
+
+/* ════ LAYOUT ════ */
+.canvas-wrap { display:grid; grid-template-columns:1fr 252px; min-height:0; overflow:hidden; }
+
+/* ════ SCROLLABLE ZOOM CONTAINER ════ */
+.scroll-container {
+  overflow: auto;
+  position: relative;
+}
+.zoom-wrapper {
+  transform-origin: top left;
+  transition: transform 0.2s ease;
+  min-width: 100%;
+  min-height: 100%;
+  width: max-content;
+  height: max-content;
+}
+
+/* ════ FLOW CANVAS — 4 rows ════ */
+.flow-canvas {
+  position:relative;
+  display:grid; grid-template-rows:1fr 1fr 1fr 1fr;
+  padding:12px 32px;
+  min-height: 100%;
+}
+#svg-conn { position:absolute; inset:0; pointer-events:none; z-index:4; overflow:visible; }
+
+.flow-row { display:flex; flex-direction:column; justify-content:center; position:relative; z-index:8; }
+.row-label {
+  font-size:9px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--t3); margin-bottom:8px;
+  display:flex; align-items:center; gap:10px;
+}
+.row-label::after { content:''; flex:1; height:1px; background:var(--border-dim); }
+.rl-sub { color:var(--t2); text-transform:none; letter-spacing:0; font-size:9px; }
+.nodes { display:flex; gap:9px; flex-wrap:wrap; align-items:flex-start; max-width:1750px; }
+
+/* ════ NODE BASE ════ */
+.node {
+  position:relative; border-radius:10px;
+  background:var(--surface); border:1px solid var(--border);
+  cursor:default; transition:all .32s;
+}
+.node.can-click { cursor:crosshair; }
+.node.can-click:hover { border-color:var(--amber); box-shadow:0 0 14px var(--amber-g); }
+.node-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+.n-ico  { font-size:13px; }
+.n-led  { width:5px; height:5px; border-radius:50%; background:var(--t4); flex-shrink:0; }
+.n-name { font-family:var(--ff); font-size:12px; font-weight:600; color:var(--t2); }
+.n-meta { font-size:10px; color:var(--t3); margin-top:2px; }
+.n-tag  { display:inline-block; font-size:9px; padding:2px 6px; border-radius:4px; background:var(--surface-3); color:var(--t3); text-transform:uppercase; letter-spacing:.07em; margin-top:4px; }
+.n-idx  { position:absolute; top:6px; right:8px; font-size:9px; color:var(--t4); }
+
+/* green active */
+.node.g-act {
+  border-color:var(--green); background:var(--green-dim);
+  box-shadow:0 0 28px var(--green-g), inset 0 0 20px var(--green-dim);
+}
+.node.g-act .n-led  { background:var(--green); box-shadow:0 0 5px var(--green-g); animation:blink 1.8s infinite; }
+.node.g-act .n-name { color:var(--green); }
+.node.g-act .n-meta { color:rgba(0,255,136,.5); }
+.node.g-act .n-tag  { background:rgba(0,255,136,.1); color:rgba(0,255,136,.65); }
+.node.g-act .n-idx  { color:rgba(0,255,136,.4); }
+
+/* blue active (keys) */
+.node.b-act {
+  border-color:var(--blue); background:var(--blue-dim);
+  box-shadow:0 0 26px var(--blue-g), inset 0 0 20px var(--blue-dim);
+}
+.node.b-act .n-led  { background:var(--blue); box-shadow:0 0 5px var(--blue-g); animation:blink 1.8s infinite; }
+.node.b-act .n-name { color:var(--blue); }
+.node.b-act .n-meta { color:rgba(56,189,248,.5); }
+.node.b-act .n-idx  { color:rgba(56,189,248,.4); }
+
+/* warn / err */
+.node.warn { border-color:var(--amber); background:var(--amber-dim); box-shadow:0 0 14px var(--amber-g); }
+.node.warn .n-led  { background:var(--amber); box-shadow:0 0 5px var(--amber-g); }
+.node.warn .n-name { color:var(--amber); }
+.node.warn .n-meta { color:rgba(245,158,11,.5); }
+.node.err  { border-color:var(--red); background:var(--red-dim); box-shadow:0 0 10px var(--red-g); opacity:.6; }
+.node.err  .n-led  { background:var(--red); box-shadow:0 0 5px var(--red-g); }
+.node.err  .n-name { color:var(--red); }
+
+/* flash */
+.node.fx   { animation:fx-g .55s ease-out forwards; }
+.node.fx-b { animation:fx-b .55s ease-out forwards; }
+.node.fx-w { animation:fx-w .55s ease-out forwards; }
+.node.fx-e { animation:fx-e .55s ease-out forwards; }
+@keyframes fx-g { 0%{box-shadow:0 0 0 rgba(0,255,136,0)} 30%{box-shadow:0 0 55px rgba(0,255,136,.9),0 0 100px rgba(0,255,136,.4)} 100%{box-shadow:0 0 22px var(--green-g)} }
+@keyframes fx-b { 0%{box-shadow:0 0 0 rgba(56,189,248,0)} 30%{box-shadow:0 0 50px rgba(56,189,248,.9),0 0 90px rgba(56,189,248,.4)} 100%{box-shadow:0 0 20px var(--blue-g)} }
+@keyframes fx-w { 30%{box-shadow:0 0 40px rgba(245,158,11,.8)} 100%{box-shadow:0 0 14px var(--amber-g)} }
+@keyframes fx-e { 30%{box-shadow:0 0 40px rgba(255,51,85,.8)} 100%{box-shadow:0 0 12px var(--red-g)} }
+
+/* sizes */
+.sz-profile  { padding:12px 17px; min-width:150px; }
+.sz-model    { padding:10px 13px; min-width:162px; max-width:210px; }
+.sz-provider { padding:10px 13px; min-width:120px; }
+.sz-key      { padding:9px 12px;  min-width:100px; max-width:138px; }
+
+/* key stats */
+.k-stats { display:flex; gap:7px; margin-top:3px; font-size:9px; color:var(--t4); }
+.node.b-act .k-stats { color:rgba(56,189,248,.4); }
+.node.warn  .k-stats { color:rgba(245,158,11,.4); }
+.ks-e { color:rgba(255,51,85,.6) !important; }
+.ks-o { color:rgba(56,189,248,.6) !important; }
+
+/* ════ SVG PATHS ════ */
+.p-g { fill:none; stroke:var(--green); stroke-width:1.5; stroke-dasharray:7 5; opacity:.7; animation:flow 1.1s linear infinite; }
+.p-b { fill:none; stroke:var(--blue);  stroke-width:1.5; stroke-dasharray:7 5; opacity:.65; animation:flow 1s linear infinite; }
+.p-d { fill:none; stroke:var(--border); stroke-width:1; stroke-dasharray:4 8; opacity:.3; }
+@keyframes flow { to{ stroke-dashoffset:-24; } }
+.td-g { fill:var(--green); filter:drop-shadow(0 0 5px var(--green)); }
+.td-b { fill:var(--blue);  filter:drop-shadow(0 0 5px var(--blue)); }
+
+/* ════ SIDEBAR ════ */
+.sidebar { border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; }
+.sb-sec  { padding:12px 14px 10px; border-bottom:1px solid var(--border-dim); flex-shrink:0; }
+.sb-sec.grow { flex:1; display:flex; flex-direction:column; min-height:0; border-bottom:none; }
+.sb-ttl  { font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--t3); margin-bottom:10px; }
+.tok-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+.tok-lbl { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--t2); }
+.arr-in  { color:var(--blue);   font-size:13px; }
+.arr-out { color:var(--purple); font-size:13px; }
+.tok-val { font-size:17px; font-weight:600; color:var(--text); letter-spacing:-.02em; }
+.tok-val.tick { animation:tickUp .12s ease-out; }
+@keyframes tickUp { 0%{transform:translateY(-3px);opacity:.4} 100%{transform:translateY(0);opacity:1} }
+.mini-stat { display:flex; justify-content:space-between; font-size:10px; color:var(--t3); margin-top:3px; }
+.mini-stat b { color:var(--t2); font-weight:400; }
+.sb-keys { display:flex; flex-wrap:wrap; gap:5px; }
+.sb-keys.expanded { flex-wrap:nowrap; overflow-x:auto; max-height:60px; padding-bottom:4px; }
+.eye-btn {
+  background:none; border:none; cursor:pointer; font-size:12px; margin-left:6px;
+  opacity:0.6; transition:all .2s; vertical-align:middle;
+}
+.eye-btn:hover { opacity:1; }
+.eye-btn.active { opacity:1; }
+.eye-btn.closed { opacity:0.4; }
+.sk-chip { display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:6px; background:var(--surface-2); border:1px solid var(--border); font-size:9.5px; color:var(--t2); transition:all .2s; }
+.sk-chip.active { border-color:var(--blue);  color:var(--blue);  background:var(--blue-dim);  box-shadow:0 0 7px var(--blue-g); }
+.sk-chip.warn   { border-color:var(--amber); color:var(--amber); background:var(--amber-dim); }
+.sk-chip.err    { border-color:var(--red);   color:var(--red);   background:var(--red-dim); }
+.sk-led { width:4px; height:4px; border-radius:50%; background:var(--t4); }
+.sk-chip.active .sk-led { background:var(--blue); box-shadow:0 0 4px var(--blue-g); animation:blink 1.8s infinite; }
+.sk-chip.warn   .sk-led { background:var(--amber); }
+.sk-chip.err    .sk-led { background:var(--red); }
+.feed-wrap { flex:1; overflow-y:auto; padding:0 14px 8px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+.log-row { display:grid; grid-template-columns:46px 1fr; gap:7px; padding:5px 0; border-bottom:1px solid var(--border-dim); font-size:9.5px; animation:logIn .22s ease-out; }
+@keyframes logIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
+.log-t { color:var(--t4); font-size:8.5px; line-height:1.6; }
+.log-m { color:var(--t2); line-height:1.55; }
+.log-m .ok { color:var(--green); }
+.log-m .w  { color:var(--amber); }
+.log-m .er { color:var(--red); }
+.log-m .k  { color:var(--blue); }
+.log-m .mo { color:var(--purple); }
+
+/* ════ STATUS BAR ════ */
+.status-bar { display:flex; align-items:center; gap:12px; padding:0 18px; border-top:1px solid var(--border); background:rgba(2,4,14,.94); font-size:9.5px; color:var(--t3); }
+.sb-it { display:flex; align-items:center; gap:4px; }
+.sb-it b { color:var(--t2); font-weight:400; }
+.sb-sp { flex:1; }
+.sb-mode { color:var(--green); }
+.sb-mode.manual { color:var(--amber); }
+
+/* ════ MANUAL BANNER ════ */
+.manual-banner { display:none; position:fixed; top:54px; left:0; right:252px; padding:7px 18px; text-align:center; background:rgba(245,158,11,.07); border-bottom:1px solid var(--amber); font-size:10px; color:var(--amber); z-index:50; animation:slideD .22s ease-out; }
+@keyframes slideD { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+.manual-banner.on { display:block; }
+.manual-hint { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--amber); opacity:.65; pointer-events:none; z-index:20; display:none; }
+.manual-mode .manual-hint { display:block; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hdr">
+    <a class="back-btn" href="javascript:history.back()">← Dashboard</a>
+    <div class="hdiv"></div>
+    <div class="proj-badge">
+      <span class="proj-lbl">Projet</span>
+      <span class="proj-name" id="projName">—</span>
+    </div>
+    <div class="token-pill" id="hdrToken">••••••••</div>
+    <div class="hdiv"></div>
+    <div class="live-ind">
+      <div class="live-dot" id="liveDot"></div>
+      <span id="liveLabel">DEMO</span>
+    </div>
+    <div class="hdr-sp"></div>
+    <div class="stat-row">
+      <span><span id="hdrReqs">0</span> req</span>
+      <span>uptime <span id="hdrUptime">00:00:00</span></span>
+    </div>
+    <div class="hdiv"></div>
+    <div class="mode-toggle">
+      <button class="mbtn on"    id="btnAuto"   onclick="setMode('auto')">⚡ AUTO</button>
+      <button class="mbtn"       id="btnManual" onclick="setMode('manual')">🎯 MANUEL</button>
+    </div>
+    <div class="hdiv"></div>
+    <div class="zoom-controls">
+      <button class="zm-btn" onclick="zoomOut()" title="Réduire (Ctrl+-)" id="btnZoomOut">−</button>
+      <span class="zm-level" id="zoomLevel">100%</span>
+      <button class="zm-btn" onclick="zoomIn()" title="Agrandir (Ctrl++)" id="btnZoomIn">+</button>
+      <button class="zm-btn" onclick="resetZoom()" title="Reset zoom" id="btnZoomReset">⟲</button>
+    </div>
+  </header>
+
+  <div class="manual-banner" id="manualBanner">
+    ⚠️ MODE MANUEL — Cliquez un nœud pour forcer la sélection. Rotations suspendues.
+  </div>
+
+  <div class="canvas-wrap">
+    <div class="scroll-container" id="scrollContainer">
+      <div class="zoom-wrapper" id="zoomWrapper">
+        <div class="flow-canvas manual-target" id="flowCanvas">
+          <svg id="svg-conn"></svg>
+
+          <!-- ROW 1 — PROFILS du projet -->
+          <div class="flow-row">
+            <div class="row-label">Profils du projet</div>
+            <div class="nodes" id="rowProfiles"></div>
+          </div>
+
+          <!-- ROW 2 — MODÈLES du profil actif -->
+          <div class="flow-row">
+            <div class="row-label">Modèles &nbsp;·&nbsp; <span class="rl-sub" id="rlProfile">—</span></div>
+            <div class="nodes" id="rowModels"></div>
+          </div>
+
+          <!-- ROW 3 — PROVIDER du modèle actif + les autres providers du profil (fallbacks) -->
+          <div class="flow-row">
+            <div class="row-label">Providers &nbsp;·&nbsp; <span class="rl-sub" id="rlModel">—</span></div>
+            <div class="nodes" id="rowProviders"></div>
+          </div>
+
+          <!-- ROW 4 — CLÉS du provider actif -->
+          <div class="flow-row">
+            <div class="row-label">Clés &nbsp;·&nbsp; <span class="rl-sub" id="rlProvider">—</span></div>
+            <div class="nodes" id="rowKeys"></div>
+          </div>
+
+          <div class="manual-hint">🎯 Cliquez un nœud pour forcer la sélection</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="sb-sec">
+        <div class="sb-ttl">Tokens · session</div>
+        <div class="tok-row">
+          <div class="tok-lbl"><span class="arr-in">↑</span> Entrée</div>
+          <div class="tok-val" id="tokIn">0</div>
+        </div>
+        <div class="tok-row">
+          <div class="tok-lbl"><span class="arr-out">↓</span> Sortie</div>
+          <div class="tok-val" id="tokOut">0</div>
+        </div>
+        <div class="mini-stat"><span>Latence moy.</span><b id="avgMs">—</b></div>
+        <div class="mini-stat" style="margin-top:2px"><span>Total requêtes</span><b id="totalReqs">0</b></div>
+      </div>
+      <div class="sb-sec">
+        <div class="sb-ttl">
+          Clés · <span id="sbKeysTitle">—</span>
+          <button class="eye-btn" id="btnEye" onclick="toggleKeysView()" title="Afficher/Masquer toutes les clés">👁</button>
+        </div>
+        <div class="sb-keys" id="sbKeysGrid"></div>
+      </div>
+      <div class="sb-sec grow">
+        <div class="sb-ttl">Journal d'activité</div>
+        <div class="feed-wrap" id="actFeed"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="status-bar">
+    <div class="sb-it">Profil: <b id="sbProfile">—</b></div>
+    <div class="sb-it">Modèle: <b id="sbModel">—</b></div>
+    <div class="sb-it">Provider: <b id="sbProvider">—</b></div>
+    <div class="sb-it">Clé: <b id="sbKey">—</b></div>
+    <div class="sb-sp"></div>
+    <div class="sb-mode" id="sbMode">⚡ AUTO</div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   ARCHITECTURE CORRECTE
+   Projet → Profils → Modèles (par profil) → Provider (par modèle) → Clés (par provider)
+══════════════════════════════════════════════════════════ */
+const projectId = new URLSearchParams(location.search).get('project') || 'internat';
+let mode = 'auto', startTime = Date.now(), rotIdx = 0, demoRunning = false;
+let keysViewExpanded = false; // true = show all keys, false = show only active key
+let zoomLevel = 1.0, minZoom = 0.3, maxZoom = 2.0, zoomStep = 0.1;
+
+/* ══════════════════════════════════════════════════════════
+   ZOOM FUNCTIONS
+══════════════════════════════════════════════════════════ */
+function zoomIn() {
+  if (zoomLevel < maxZoom) {
+    zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
+    applyZoom();
+  }
+}
+function zoomOut() {
+  if (zoomLevel > minZoom) {
+    zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
+    applyZoom();
+  }
+}
+function resetZoom() {
+  zoomLevel = 1.0;
+  applyZoom();
+}
+function applyZoom() {
+  const wrapper = document.getElementById('zoomWrapper');
+  const levelEl = document.getElementById('zoomLevel');
+  if (wrapper) {
+    // Use transform scale for zooming - works in all browsers
+    wrapper.style.transform = `scale(${zoomLevel})`;
+  }
+  if (levelEl) {
+    levelEl.textContent = Math.round(zoomLevel * 100) + '%';
+  }
+  // Re-draw SVG after zoom
+  setTimeout(() => requestAnimationFrame(draw), 50);
+}
+
+// Keyboard shortcuts for zoom
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomIn(); }
+    else if (e.key === '-') { e.preventDefault(); zoomOut(); }
+    else if (e.key === '0') { e.preventDefault(); resetZoom(); }
+  }
+});
+
+/* ─── DATA ─── */
+const DATA = {
+  project: { name:projectId, token:'rtr_proj_6f2a9b4e' },
+
+  profiles: [
+    { id:'internat', name:'internat', emoji:'🩺', desc:'Internat médecine 2026', custom:true  },
+    { id:'coding',   name:'coding',   emoji:'💻', desc:'Code & développement',   custom:false },
+    { id:'chat',     name:'chat',     emoji:'💬', desc:'Chat général',           custom:false },
+  ],
+
+  /* Modèles de CHAQUE profil — liste ordonnée = ordre de fallback */
+  profileModels: {
+    internat: [
+      { id:'im1', name:'qwen/qwen3.5-397b-a17b',           short:'qwen3.5-397b',   provider:'nvidia',       order:1 },
+      { id:'im2', name:'qwen3.5:397b-cloud',                short:'qwen3.5:397b',   provider:'ollama_cloud', order:2 },
+      { id:'im3', name:'google/gemma-3-27b-it:free',        short:'gemma-3-27b',    provider:'openrouter',   order:3 },
+      { id:'im4', name:'deepseek/deepseek-r1:free',         short:'deepseek-r1',    provider:'openrouter',   order:4 },
+    ],
+    coding: [
+      { id:'cm1', name:'meta-llama/llama-3.3-70b-instruct:free', short:'llama-3.3-70b', provider:'openrouter',   order:1 },
+      { id:'cm2', name:'qwen/qwen3.5-397b-a17b',                 short:'qwen3.5-397b',  provider:'nvidia',       order:2 },
+      { id:'cm3', name:'codestral:22b',                          short:'codestral:22b', provider:'ollama_cloud', order:3 },
+    ],
+    chat: [
+      { id:'ch1', name:'gemma-3-27b-it',       short:'gemma-3-27b',  provider:'google',       order:1 },
+      { id:'ch2', name:'llama-3.1-8b-instant', short:'llama-3.1-8b', provider:'google',       order:2 },
+      { id:'ch3', name:'qwen3.5:32b-cloud',    short:'qwen3.5:32b',  provider:'ollama_cloud', order:3 },
+    ],
+  },
+
+  /* Tous les providers — on n'affiche que ceux utilisés par le profil actif */
+  providers: {
+    nvidia:       { label:'NVIDIA',       emoji:'🟢', status:'ok'      },
+    ollama_cloud: { label:'Ollama Cloud', emoji:'☁️', status:'ok'      },
+    google:       { label:'Google',       emoji:'🔵', status:'warning' },
+    openrouter:   { label:'OpenRouter',   emoji:'🔀', status:'ok'      },
+  },
+
+  /* Clés indexées par provider */
+  keys: {
+    nvidia_1:     { label:'#1', provider:'nvidia',       status:'ok',      requests:142, errors:0,  tokens:45230 },
+    nvidia_2:     { label:'#2', provider:'nvidia',       status:'ok',      requests:98,  errors:1,  tokens:31200 },
+    ollama_1:     { label:'#1', provider:'ollama_cloud', status:'ok',      requests:55,  errors:0,  tokens:18400 },
+    ollama_2:     { label:'#2', provider:'ollama_cloud', status:'ok',      requests:43,  errors:0,  tokens:14100 },
+    ollama_3:     { label:'#3', provider:'ollama_cloud', status:'warning', requests:20,  errors:5,  tokens:6200  },
+    ollama_4:     { label:'#4', provider:'ollama_cloud', status:'ok',      requests:38,  errors:0,  tokens:11200 },
+    google_1:     { label:'#1', provider:'google',       status:'ok',      requests:77,  errors:0,  tokens:22100 },
+    google_2:     { label:'#2', provider:'google',       status:'error',   requests:12,  errors:12, tokens:0     },
+    google_3:     { label:'#3', provider:'google',       status:'ok',      requests:61,  errors:0,  tokens:18500 },
+    openrouter_1: { label:'#1', provider:'openrouter',   status:'ok',      requests:34,  errors:0,  tokens:9800  },
+    openrouter_2: { label:'#2', provider:'openrouter',   status:'ok',      requests:29,  errors:2,  tokens:8100  },
+    openrouter_3: { label:'#3', provider:'openrouter',   status:'warning', requests:10,  errors:3,  tokens:2900  },
+  },
+};
+
+/* ─── SÉLECTION EN COURS ─── */
+const SEL = {
+  profile:  'internat',
+  model:    'qwen/qwen3.5-397b-a17b',
+  provider: 'nvidia',
+  key_id:   'nvidia_2',
+};
+
+const MET = { tokens_in:0, tokens_out:0, avg_ms:0, total_reqs:0 };
+
+/* ══════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════ */
+const modelsOf   = pid  => DATA.profileModels[pid] || [];
+const keysOf     = pid  => Object.entries(DATA.keys).filter(([,k]) => k.provider === pid);
+const firstOkKey = pid  => (keysOf(pid).find(([,k]) => k.status==='ok') || [])[0] || null;
+const activeM    = ()   => modelsOf(SEL.profile).find(m => m.name === SEL.model) || null;
+const provLabel  = pid  => DATA.providers[pid]?.label || pid;
+const provEmoji  = pid  => DATA.providers[pid]?.emoji || '?';
+
+/* unique providers used by models of a profile */
+const profileProviders = pid => [...new Set(modelsOf(pid).map(m => m.provider))];
+
+/* ══════════════════════════════════════════════════════════
+   RENDER — ROW 1  PROFILS
+══════════════════════════════════════════════════════════ */
+function renderProfiles() {
+  document.getElementById('rowProfiles').innerHTML = DATA.profiles.map(p => {
+    const isAct = p.id === SEL.profile;
+    const mc    = modelsOf(p.id).length;
+    return `<div class="node sz-profile ${isAct?'g-act':''}${mode==='manual'?' can-click':''}"
+         id="prof-${p.id}" onclick="nc_click('profile','${p.id}')">
+      <div class="node-hd"><span class="n-ico">${p.emoji}</span><span class="n-led"></span></div>
+      <div class="n-name">${p.name}</div>
+      <div class="n-meta">${mc} modèle${mc>1?'s':''}</div>
+      ${p.custom?'<span class="n-tag">custom</span>':''}
+    </div>`;
+  }).join('');
+  document.getElementById('rlProfile').textContent = SEL.profile;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER — ROW 2  MODÈLES du profil actif
+══════════════════════════════════════════════════════════ */
+function renderModels() {
+  document.getElementById('rowModels').innerHTML = modelsOf(SEL.profile).map(m => {
+    const isAct = m.name === SEL.model;
+    return `<div class="node sz-model ${isAct?'g-act':''}${mode==='manual'?' can-click':''}"
+         id="mod-${m.id}" onclick="nc_click('model','${m.id}')">
+      <span class="n-idx">#${m.order}</span>
+      <div class="n-name" style="padding-right:18px;font-size:11px">${m.short}</div>
+      <div class="n-meta">${provEmoji(m.provider)} ${provLabel(m.provider)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('rlModel').textContent = activeM()?.short || '—';
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER — ROW 3  PROVIDERS utilisés par le profil actif
+   → actif = celui du modèle sélectionné
+   → les autres = fallbacks, affichés en dim avec leur statut clés
+══════════════════════════════════════════════════════════ */
+function renderProviders() {
+  const pids = profileProviders(SEL.profile);
+  document.getElementById('rowProviders').innerHTML = pids.map(pid => {
+    const p    = DATA.providers[pid] || { label:pid, emoji:'?', status:'ok' };
+    const isAct = pid === SEL.provider;
+    const kk   = keysOf(pid);
+    const okN  = kk.filter(([,k]) => k.status==='ok').length;
+    const waN  = kk.filter(([,k]) => k.status==='warning').length;
+    const erN  = kk.filter(([,k]) => k.status==='error').length;
+    let cls = isAct ? 'g-act' : (erN===kk.length && kk.length>0 ? 'err' : waN>0||p.status==='warning' ? 'warn' : '');
+    const bits = [];
+    if (okN) bits.push(`<span style="color:rgba(0,255,136,.6)">${okN}✓</span>`);
+    if (waN) bits.push(`<span style="color:var(--amber)">${waN}⚠</span>`);
+    if (erN) bits.push(`<span style="color:var(--red)">${erN}✗</span>`);
+    return `<div class="node sz-provider ${cls}${mode==='manual'?' can-click':''}"
+         id="prov-${pid}" onclick="nc_click('provider','${pid}')">
+      <div class="node-hd"><span class="n-ico">${p.emoji}</span><span class="n-led"></span></div>
+      <div class="n-name">${p.label}</div>
+      <div class="n-meta">${bits.join(' · ')}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('rlProvider').textContent = provLabel(SEL.provider);
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER — ROW 4  CLÉS du provider actif
+══════════════════════════════════════════════════════════ */
+function renderKeys() {
+  const pairs = keysOf(SEL.provider);
+  document.getElementById('rowKeys').innerHTML = pairs.map(([id, k]) => {
+    const isAct = id === SEL.key_id;
+    const cls   = isAct ? 'b-act' : k.status==='warning' ? 'warn' : k.status==='error' ? 'err' : '';
+    const tokS  = k.tokens >= 1000 ? `${(k.tokens/1000).toFixed(0)}k` : `${k.tokens}`;
+    const errS  = k.errors>0 ? `<span class="ks-e">${k.errors}err</span>` : `<span class="ks-o">0err</span>`;
+    return `<div class="node sz-key ${cls}${mode==='manual'?' can-click':''}"
+         id="key-${id}" onclick="nc_click('key','${id}')"
+         title="Key ${k.label} · ${k.requests} req · ${k.errors} err · ${k.tokens.toLocaleString()} tokens">
+      <span class="n-idx">${k.label}</span>
+      <div class="node-hd" style="margin-bottom:2px"><span class="n-led"></span></div>
+      <div class="n-name" style="font-size:11px">Key ${k.label}</div>
+      <div class="k-stats">${errS}<span>${tokS} tok</span></div>
+    </div>`;
+  }).join('');
+
+  /* sidebar résumé */
+  document.getElementById('sbKeysTitle').textContent = provLabel(SEL.provider);
+
+  // Filter keys based on view mode
+  const filteredPairs = keysViewExpanded ? pairs : pairs.filter(([id]) => id === SEL.key_id);
+
+  // Add/remove expanded class for scrolling
+  const sbKeysGrid = document.getElementById('sbKeysGrid');
+  if (keysViewExpanded && pairs.length > 10) {
+    sbKeysGrid.classList.add('expanded');
+  } else {
+    sbKeysGrid.classList.remove('expanded');
+  }
+
+  document.getElementById('sbKeysGrid').innerHTML = filteredPairs.map(([id, k]) => {
+    const isAct = id === SEL.key_id;
+    const cls   = isAct ? 'active' : k.status==='warning' ? 'warn' : k.status==='error' ? 'err' : '';
+    return `<div class="sk-chip ${cls}" title="${k.requests}req · ${k.errors}err · ${k.tokens.toLocaleString()}tok">
+      <div class="sk-led"></div><span>Key ${k.label}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER METRICS + STATUS BAR
+══════════════════════════════════════════════════════════ */
+function renderMet() {
+  document.getElementById('tokIn').textContent     = MET.tokens_in.toLocaleString('fr-FR');
+  document.getElementById('tokOut').textContent    = MET.tokens_out.toLocaleString('fr-FR');
+  document.getElementById('avgMs').textContent     = MET.avg_ms ? `${MET.avg_ms} ms` : '—';
+  document.getElementById('totalReqs').textContent = MET.total_reqs.toLocaleString('fr-FR');
+  document.getElementById('hdrReqs').textContent   = MET.total_reqs.toLocaleString('fr-FR');
+}
+function renderSB() {
+  document.getElementById('sbProfile').textContent  = SEL.profile;
+  document.getElementById('sbModel').textContent    = activeM()?.short || '—';
+  document.getElementById('sbProvider').textContent = provLabel(SEL.provider);
+  const k = DATA.keys[SEL.key_id];
+  document.getElementById('sbKey').textContent = k ? `Key ${k.label} · ${k.requests}req` : '—';
+  const el = document.getElementById('sbMode');
+  el.textContent = mode==='auto' ? '⚡ AUTO' : '🎯 MANUEL';
+  el.className   = 'sb-mode'+(mode==='manual'?' manual':'');
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER ALL
+══════════════════════════════════════════════════════════ */
+function render() {
+  console.log('[render] Starting render, profiles:', DATA.profiles.length, 'models:', Object.keys(DATA.profileModels));
+  renderProfiles();
+  renderModels();
+  renderProviders();
+  renderKeys();
+  renderMet();
+  renderSB();
+  console.log('[render] Calling draw...');
+  requestAnimationFrame(draw);
+  console.log('[render] Done');
+}
+
+/* ══════════════════════════════════════════════════════════
+   SVG — Profil actif → Modèle actif → Provider actif → Clé active
+   Autres nœuds en dim pour montrer les options de fallback
+══════════════════════════════════════════════════════════ */
+function nc(el) {
+  if (!el) return null;
+  const cv = document.getElementById('flowCanvas').getBoundingClientRect();
+  const er = el.getBoundingClientRect();
+  return { x:((er.left+er.right)/2-cv.left)/zoomLevel, top:(er.top-cv.top)/zoomLevel, bottom:(er.bottom-cv.top)/zoomLevel };
+}
+function bez(a,b) { const m=(a.bottom+b.top)/2; return `M${a.x},${a.bottom} C${a.x},${m} ${b.x},${m} ${b.x},${b.top}`; }
+function mkP(svg,d,cls,id) {
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',d); p.setAttribute('class',cls); if(id) p.setAttribute('id',id);
+  svg.appendChild(p);
+}
+function mkDot(svg,pathId,dur,begin,cls) {
+  const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  c.setAttribute('r','4'); c.setAttribute('class',cls);
+  const a=document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+  a.setAttribute('dur',dur); a.setAttribute('repeatCount','indefinite');
+  if(begin) a.setAttribute('begin',begin);
+  const mp=document.createElementNS('http://www.w3.org/2000/svg','mpath');
+  mp.setAttributeNS('http://www.w3.org/1999/xlink','href','#'+pathId);
+  a.appendChild(mp); c.appendChild(a); svg.appendChild(c);
+}
+
+function draw() {
+  const svg = document.getElementById('svg-conn');
+  const cv  = document.getElementById('flowCanvas');
+  // Account for zoom level
+  svg.setAttribute('width', cv.offsetWidth);
+  svg.setAttribute('height', cv.offsetHeight);
+  svg.innerHTML = '';
+
+  const am   = activeM();
+  const profC  = nc(document.getElementById(`prof-${SEL.profile}`));
+  const modC   = nc(document.getElementById(am ? `mod-${am.id}` : null));
+  const provC  = nc(document.getElementById(`prov-${SEL.provider}`));
+  const keyC   = nc(document.getElementById(`key-${SEL.key_id}`));
+
+  /* 1. Profil actif → tous les modèles (dim), actif (vert) */
+  if (profC) {
+    modelsOf(SEL.profile).forEach(m => {
+      const c = nc(document.getElementById(`mod-${m.id}`)); if(!c) return;
+      const isA = m.name===SEL.model;
+      mkP(svg, bez(profC,c), isA?'p-g':'p-d', isA?'ap1':null);
+    });
+    if (modC) mkDot(svg,'ap1','1.5s',null,'td-g');
+  }
+
+  /* 2. Modèle actif → tous les providers du profil (dim), actif (vert) */
+  if (modC) {
+    profileProviders(SEL.profile).forEach(pid => {
+      const c = nc(document.getElementById(`prov-${pid}`)); if(!c) return;
+      const isA = pid===SEL.provider;
+      mkP(svg, bez(modC,c), isA?'p-g':'p-d', isA?'ap2':null);
+    });
+    if (provC) mkDot(svg,'ap2','1.4s','0.6s','td-g');
+  }
+
+  /* 3. Provider actif → toutes ses clés (dim), active (bleu) */
+  if (provC) {
+    keysOf(SEL.provider).forEach(([kid]) => {
+      const c = nc(document.getElementById(`key-${kid}`)); if(!c) return;
+      const isA = kid===SEL.key_id;
+      mkP(svg, bez(provC,c), isA?'p-b':'p-d', isA?'ap3':null);
+    });
+    if (keyC) mkDot(svg,'ap3','1.2s','1.3s','td-b');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   LOG
+══════════════════════════════════════════════════════════ */
+function log(html) {
+  const feed = document.getElementById('actFeed');
+  const t    = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const row  = document.createElement('div');
+  row.className='log-row';
+  row.innerHTML=`<div class="log-t">${t}</div><div class="log-m">${html}</div>`;
+  feed.insertBefore(row,feed.firstChild);
+  while(feed.children.length>60) feed.removeChild(feed.lastChild);
+}
+
+/* ══════════════════════════════════════════════════════════
+   MODE
+══════════════════════════════════════════════════════════ */
+function setMode(m) {
+  mode=m;
+  document.getElementById('btnAuto').className   ='mbtn'+(m==='auto'  ?' on':'');
+  document.getElementById('btnManual').className ='mbtn'+(m==='manual'?' on manual':'');
+  document.getElementById('manualBanner').className='manual-banner'+(m==='manual'?' on':'');
+  document.querySelector('.manual-target').classList.toggle('manual-mode',m==='manual');
+  log(m==='manual'?`<span class="w">🎯 Mode manuel — rotations suspendues</span>`:`<span class="ok">⚡ Mode auto repris</span>`);
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════
+   KEYS VIEW TOGGLE
+══════════════════════════════════════════════════════════ */
+function toggleKeysView() {
+  keysViewExpanded = !keysViewExpanded;
+  const btn = document.getElementById('btnEye');
+  if (keysViewExpanded) {
+    btn.textContent = '🔒';
+    btn.classList.add('closed');
+    btn.classList.remove('active');
+    log(`<span class="k">👁 Vue étendue — toutes les clés</span>`);
+  } else {
+    btn.textContent = '👁';
+    btn.classList.add('active');
+    btn.classList.remove('closed');
+    log(`<span class="k">🔒 Vue simplifiée — clé active</span>`);
+  }
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════
+   FLASH
+══════════════════════════════════════════════════════════ */
+function flash(id, t) {
+  const el=document.getElementById(id); if(!el) return;
+  const c=t==='b'?'fx-b':t==='w'?'fx-w':t==='e'?'fx-e':'fx';
+  el.classList.add(c); setTimeout(()=>el.classList.remove(c),600);
+}
+
+/* ══════════════════════════════════════════════════════════
+   NODE CLICK (mode manuel)
+══════════════════════════════════════════════════════════ */
+function nc_click(type, id) {
+  if (mode!=='manual') return;
+
+  if (type==='profile') {
+    if (SEL.profile===id) return;
+    // Appeler API pour forcer le profil
+    fetch('/api/override/force', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({profile: id, provider: 'auto'})
+    }).then(r=>r.json()).catch(e=>console.error('Override error:',e));
+
+    SEL.profile = id;
+    /* auto-sélectionner le premier modèle du nouveau profil */
+    const models = modelsOf(id);
+    if (models.length) {
+      const m = models[0];
+      SEL.model = m.name; SEL.provider = m.provider;
+      const fk = firstOkKey(m.provider); if(fk) SEL.key_id=fk;
+    }
+    log(`📋 Profil → <span class="ok">${id}</span> · ${modelsOf(id).length} modèles disponibles`);
+    flash(`prof-${id}`);
+  }
+
+  else if (type==='model') {
+    const m = modelsOf(SEL.profile).find(x => x.id===id); if(!m) return;
+    // Appeler API pour forcer le provider du profil
+    fetch('/api/override/force', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({profile: SEL.profile, provider: m.provider})
+    }).then(r=>r.json()).catch(e=>console.error('Override error:',e));
+
+    SEL.model = m.name; SEL.provider = m.provider;
+    const fk = firstOkKey(m.provider); if(fk) SEL.key_id=fk;
+    log(`🤖 Modèle → <span class="mo">${m.short}</span> · provider: <span class="ok">${provLabel(m.provider)}</span>`);
+    flash(`mod-${id}`);
+  }
+
+  else if (type==='provider') {
+    /* Un provider ne peut être forcé que s'il a un modèle dans le profil actif */
+    const matching = modelsOf(SEL.profile).find(m => m.provider===id);
+    if (!matching) {
+      log(`<span class="w">⚠ ${provLabel(id)} n'a pas de modèle dans le profil « ${SEL.profile} »</span>`);
+      return;
+    }
+    // Appeler API pour forcer ce provider
+    fetch('/api/override/force', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({profile: SEL.profile, provider: id})
+    }).then(r=>r.json()).catch(e=>console.error('Override error:',e));
+
+    SEL.provider = id; SEL.model = matching.name;
+    const fk = firstOkKey(id); if(fk) SEL.key_id=fk;
+    log(`🔀 Provider → <span class="ok">${provLabel(id)}</span> · modèle: <span class="mo">${matching.short}</span>`);
+    flash(`prov-${id}`);
+  }
+
+  else if (type==='key') {
+    // Impossible de modifier les clés manuellement - rotator choisit automatiquement
+    log(`<span class="w">⚠ Impossible de modifier la clé manuellement — Rotator sélectionne automatiquement</span>`);
+    return;
+  }
+
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════
+   SSE + POLLING FALLBACK
+══════════════════════════════════════════════════════════ */
+function trySSE() {
+  console.log('[SSE] Connecting to /api/flux/events?project=' + projectId);
+  const es=new EventSource(`/api/flux/events?project=${projectId}`);
+  const t=setTimeout(()=>{es.close();startPolling();},3000);
+  es.onopen=()=>{ clearTimeout(t); document.getElementById('liveLabel').textContent='LIVE · SSE'; log(`<span class="ok">🔌 SSE connecté</span>`); console.log('[SSE] Connected'); };
+  es.onmessage=e=>{ console.log('[SSE] Received:', e.data); try{applyState(JSON.parse(e.data));}catch(e){ console.error('[SSE] Parse error:', e); } };
+  es.onerror=()=>{ clearTimeout(t); es.close(); startPolling(); };
+}
+function startPolling() {
+  console.log('[POLL] Starting polling');
+  let pollFailures = 0;
+  document.getElementById('liveLabel').textContent='LIVE · poll';
+  setInterval(async()=>{
+    try{
+      const r=await fetch(`/api/flux/state?project=${projectId}`);
+      console.log('[POLL] Response:', r.status, r.ok);
+      if(r.ok) {
+        pollFailures = 0;
+        const data = await r.json();
+        console.log('[POLL] Data:', JSON.stringify(data).slice(0,200));
+        applyState(data);
+      } else {
+        pollFailures++;
+        console.log('[POLL] Failed:', pollFailures);
+        if(pollFailures > 5) { console.log("API unavailable, falling back to demo"); startDemo(); }
+      }
+    }catch(e){
+      console.error('[POLL] Error:', e);
+      pollFailures++;
+      if(pollFailures > 5) { console.log("API unavailable, falling back to demo"); startDemo(); }
+    }
+  },2500);
+}
+function applyState(data) {
+  console.log('[applyState] Received data, keys:', Object.keys(data));
+  if (mode==='manual') return;
+  const prev={...SEL};
+
+  // Update project config from API
+  if (data.profiles) { DATA.profiles = data.profiles; console.log('[applyState] Updated profiles:', DATA.profiles.length); }
+  if (data.profileModels) { DATA.profileModels = data.profileModels; console.log('[applyState] Updated profileModels:', Object.keys(DATA.profileModels)); }
+  if (data.providers) { DATA.providers = data.providers; console.log('[applyState] Updated providers:', Object.keys(DATA.providers)); }
+  if (data.project) { DATA.project = data.project; console.log('[applyState] Updated project:', DATA.project); }
+
+  // Update active state
+  if (data.active) { ['profile','model','provider','key_id'].forEach(k=>{ if(data.active[k]) SEL[k]=data.active[k]; }); console.log('[applyState] SEL:', SEL); }
+  if (data.metrics) Object.assign(MET,data.metrics);
+  if (data.keys) DATA.keys = JSON.parse(JSON.stringify(data.keys));
+  if (prev.model   !==SEL.model)   log(`🔄 Modèle → <span class="mo">${SEL.model?.split('/').pop()}</span>`);
+  if (prev.key_id  !==SEL.key_id)  log(`🔑 Clé → <span class="k">${DATA.keys[SEL.key_id]?.label||'?'}</span>`);
+  if (prev.profile !==SEL.profile) log(`📋 Profil → <span class="ok">${SEL.profile}</span>`);
+  console.log('[applyState] Calling render...');
+  render();
+}
+/* ══════════════════════════════════════════════════════════
+   DÉMO — séquences cohérentes avec l'architecture
+══════════════════════════════════════════════════════════ */
+const DEMO = [
+  { profile:'internat', mid:'im1', key:'nvidia_2'     },
+  { profile:'internat', mid:'im2', key:'ollama_1'     },
+  { profile:'internat', mid:'im3', key:'openrouter_1' },
+  { profile:'internat', mid:'im1', key:'nvidia_1'     },
+  { profile:'internat', mid:'im4', key:'openrouter_2' },
+  { profile:'coding',   mid:'cm1', key:'openrouter_1' },
+  { profile:'coding',   mid:'cm2', key:'nvidia_1'     },
+  { profile:'internat', mid:'im2', key:'ollama_2'     },
+  { profile:'chat',     mid:'ch1', key:'google_1'     },
+  { profile:'chat',     mid:'ch3', key:'ollama_4'     },
+  { profile:'internat', mid:'im1', key:'nvidia_2'     },
+];
+
+function applyDemoStep(s) {
+  const m = modelsOf(s.profile).find(x=>x.id===s.mid); if(!m) return;
+  SEL.profile=s.profile; SEL.model=m.name; SEL.provider=m.provider; SEL.key_id=s.key;
+}
+
+function startDemo() {
+  if (demoRunning) return; demoRunning=true;
+  log(`🟢 Rotateur démarré · projet <span class="ok">${projectId}</span>`);
+  log(`📋 Profil: <span class="ok">${SEL.profile}</span>`);
+  log(`🤖 Modèle: <span class="mo">${activeM()?.short}</span>`);
+  log(`🔑 <span class="k">Key ${DATA.keys[SEL.key_id]?.label}</span> active`);
+
+  /* tokens + stats clé */
+  setInterval(()=>{
+    if(mode==='manual') return;
+    const ii=Math.floor(Math.random()*140)+30, io=Math.floor(Math.random()*90)+20;
+    MET.tokens_in+=ii; MET.tokens_out+=io; MET.total_reqs+=1; MET.avg_ms=Math.floor(Math.random()*700)+350;
+    const ck=DATA.keys[SEL.key_id]; if(ck){ck.requests+=1;ck.tokens+=ii+io;}
+    const ti=document.getElementById('tokIn'),to=document.getElementById('tokOut');
+    ti.textContent=MET.tokens_in.toLocaleString('fr-FR');
+    to.textContent=MET.tokens_out.toLocaleString('fr-FR');
+    ti.classList.add('tick');to.classList.add('tick');
+    setTimeout(()=>{ti.classList.remove('tick');to.classList.remove('tick');},150);
+    document.getElementById('totalReqs').textContent=MET.total_reqs.toLocaleString('fr-FR');
+    document.getElementById('hdrReqs').textContent=MET.total_reqs.toLocaleString('fr-FR');
+    document.getElementById('avgMs').textContent=`${MET.avg_ms} ms`;
+    if(Math.random()<.17){
+      const msgs=[
+        `✅ <span class="ok">200 OK</span> · ${MET.avg_ms}ms`,
+        `📤 → <span class="mo">${activeM()?.short}</span>`,
+        `🔑 <span class="k">Key ${DATA.keys[SEL.key_id]?.label||'?'}</span> · ${ii+io} tok`,
+        `📥 <span class="ok">${io}</span> tok sortie`,
+      ];
+      log(msgs[Math.floor(Math.random()*msgs.length)]);
+    }
+  },750);
+
+  /* rotation complète toutes les ~13s */
+  setInterval(()=>{
+    if(mode==='manual') return;
+    rotIdx=(rotIdx+1)%DEMO.length;
+    const prev={...SEL};
+    applyDemoStep(DEMO[rotIdx]);
+    if(prev.profile!==SEL.profile) log(`📋 Rotation profil <span class="w">${prev.profile}</span> → <span class="ok">${SEL.profile}</span>`);
+    if(prev.model  !==SEL.model)   log(`🔄 Rotation modèle → <span class="mo">${activeM()?.short}</span> · ${provLabel(SEL.provider)}`);
+    if(prev.key_id !==SEL.key_id)  log(`🔑 Rotation clé → <span class="k">Key ${DATA.keys[SEL.key_id]?.label}</span>`);
+    render();
+    const am=activeM();
+    flash(`prof-${SEL.profile}`);
+    if(am) flash(`mod-${am.id}`);
+    flash(`prov-${SEL.provider}`);
+    flash(`key-${SEL.key_id}`,'b');
+  },13000);
+
+  /* rotation clé seule toutes les ~7s */
+  setInterval(()=>{
+    if(mode==='manual') return;
+    const ok=keysOf(SEL.provider).filter(([id,k])=>k.status==='ok'&&id!==SEL.key_id);
+    if(!ok.length) return;
+    const [nid]=ok[Math.floor(Math.random()*ok.length)];
+    const prev=SEL.key_id; SEL.key_id=nid;
+    log(`🔑 Rotation clé <span class="w">Key ${DATA.keys[prev]?.label}</span> → <span class="k">Key ${DATA.keys[nid]?.label}</span>`);
+    render(); flash(`key-${nid}`,'b');
+  },7000);
+}
+
+/* ══════════════════════════════════════════════════════════
+   UPTIME
+══════════════════════════════════════════════════════════ */
+function updateUptime() {
+  const s=Math.floor((Date.now()-startTime)/1000);
+  document.getElementById('hdrUptime').textContent=
+    [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(n=>String(n).padStart(2,'0')).join(':');
+}
+
+/* ══════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded',()=>{
+  console.log('[INIT] Page loaded, projectId:', projectId);
+  document.getElementById('projName').textContent=projectId;
+  document.getElementById('hdrToken').textContent=DATA.project.token.slice(0,8)+'••••'+DATA.project.token.slice(-4);
+  console.log('[INIT] Calling initial render...');
+  render();
+  console.log('[INIT] Starting SSE...');
+  trySSE();
+  window.addEventListener('resize',()=>requestAnimationFrame(draw));
+  setInterval(updateUptime,1000);
+  setTimeout(()=>requestAnimationFrame(draw),800);
+});
+</script>
+</body>
+</html>

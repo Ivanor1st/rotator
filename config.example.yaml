@@ -4,15 +4,43 @@ keys:
       token: env:OLLAMA_CLOUD_TOKEN_1
     - label: Ollama Account 2
       token: env:OLLAMA_CLOUD_TOKEN_2
+    - label: Ollama Account 3
+      token: env:OLLAMA_CLOUD_TOKEN_3
+    - label: Ollama Account 4
+      token: env:OLLAMA_CLOUD_TOKEN_4
+    - label: Ollama Account 5
+      token: env:OLLAMA_CLOUD_TOKEN_5
+    - label: Ollama Account 6
+      token: env:OLLAMA_CLOUD_TOKEN_6
+    - label: Ollama Account 7
+      token: env:OLLAMA_CLOUD_TOKEN_7
+    - label: Ollama Account 8
+      token: env:OLLAMA_CLOUD_TOKEN_8
+    - label: Ollama Account 9
+      token: env:OLLAMA_CLOUD_TOKEN_9
+    - label: Ollama Account 10
+      token: env:OLLAMA_CLOUD_TOKEN_10
+    - label: Ollama Account 11
+      token: env:OLLAMA_CLOUD_TOKEN_11
+    - label: Ollama Account 12
+      token: env:OLLAMA_CLOUD_TOKEN_12
+    - label: Ollama Account 13
+      token: env:OLLAMA_CLOUD_TOKEN_13
+    - label: Ollama Account 14
+      token: env:OLLAMA_CLOUD_TOKEN_14
   nvidia:
     - label: Nvidia Account 1
       key: env:NVIDIA_API_KEY_1
+    - label: Nvidia Account 2
+      key: env:NVIDIA_API_KEY_2
   google:
     - label: Google Account 1
       key: env:GOOGLE_API_KEY_1
   openrouter:
     - label: OpenRouter Account 1
       key: env:OPENROUTER_API_KEY_1
+    - label: OpenRouter Account 2
+      key: env:OPENROUTER_API_KEY_2
 
 settings:
   port: 47822

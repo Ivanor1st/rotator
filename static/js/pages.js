@@ -25,6 +25,28 @@
     document.getElementById('onboardBase').innerText = `http://localhost:${port}/v1`;
     document.getElementById('onboardModels').innerText = `http://localhost:${port}/v1/models`;
 
+    // Hide skeletons, show content
+    const profileSkeleton = document.getElementById('profileCardsSkeleton');
+    const profileGrid = document.getElementById('profileCards');
+    const profileError = document.getElementById('profileCardsError');
+    if (profileSkeleton) profileSkeleton.style.display = 'none';
+    if (profileGrid) profileGrid.style.display = 'grid';
+    if (profileError) profileError.style.display = 'none';
+
+    const providerSkeleton = document.getElementById('providerGridSkeleton');
+    const providerGrid = document.getElementById('providerGrid');
+    const providerError = document.getElementById('providerGridError');
+    if (providerSkeleton) providerSkeleton.style.display = 'none';
+    if (providerGrid) providerGrid.style.display = 'grid';
+    if (providerError) providerError.style.display = 'none';
+
+    const securitySkeleton = document.getElementById('securityCardSkeleton');
+    const securityCard = document.getElementById('securityCard');
+    const securityError = document.getElementById('securityCardError');
+    if (securitySkeleton) securitySkeleton.style.display = 'none';
+    if (securityCard) securityCard.style.display = 'block';
+    if (securityError) securityError.style.display = 'none';
+
     const profileEmojis = { coding:'💻', reasoning:'🧠', chat:'💬', long:'📄', vision:'👁️', audio:'🎵', translate:'🌍' };
     const options = ['auto','ollama_cloud','nvidia','openrouter','google','local'];
 
@@ -141,19 +163,28 @@
     document.getElementById('logs').innerHTML = filtered.length
       ? filtered.map(l => {
           const cls = l.level === 'error' ? 'err' : l.level === 'rotation' ? 'warn' : l.level === 'system' ? 'sys' : 'ok';
-          return `<div>[${l.time}] [${l.profile||'sys'}] [${l.provider||'—'}] ${l.model||''} → <span class="${cls}">${l.message}</span></div>`;
+          const time = l.time ? new Date(l.time * 1000).toLocaleString() : '';
+          const keyNum = l.key_number && l.key_number !== '-' ? `key #${l.key_number}` : '';
+          const keyId = l.key_id && l.key_id !== '-' ? `(${l.key_id})` : '';
+          const keyInfo = keyNum ? ` ${keyNum} ${keyId}` : '';
+          return `<div>[${time}] [${l.profile||'sys'}] [${l.provider||'—'}] ${l.model||''}${keyInfo} → <span class="${cls}">${l.message}</span></div>`;
         }).join('')
       : '<div style="color:var(--text-muted); padding:20px; text-align:center">Aucune activité récente</div>';
   }
 
   /* ─── STATS ─── */
   async function refreshStats() {
-    const period = document.getElementById('statsRange')?.value || 'today';
-    const data = await api(`/api/stats?period=${period}`);
+    try {
+      const period = document.getElementById('statsRange')?.value || 'today';
+      const data = await api(`/api/stats?period=${period}`);
+      if (!data) {
+        document.getElementById('kpi').innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center">Aucune donnée disponible</div>';
+        return;
+      }
     document.getElementById('kpi').innerHTML = [
-      { label: 'Total requêtes', val: data.totals?.total || 0, icon: '📥' },
-      { label: 'Succès',         val: data.totals?.success || 0, icon: '✅', color: 'var(--green)' },
-      { label: 'Échecs',         val: data.totals?.failed || 0, icon: '❌', color: 'var(--red)' },
+      { label: 'Total requetes', val: data.totals?.total || 0, icon: '[TOT]' },
+      { label: 'Succes',         val: data.totals?.success || 0, icon: '[OK]', color: 'var(--green)' },
+      { label: 'Echecs',         val: data.totals?.failed || 0, icon: '[X]', color: 'var(--red)' },
     ].map(k => `
       <div class="card stat-kpi">
         <div class="stat-kpi-label">${k.icon} ${k.label}</div>
@@ -172,6 +203,10 @@
     };
     charts.providers = new Chart(ctxP, { type:'bar', data:{ labels:Object.keys(data.by_provider||{}), datasets:[{ label:'Requêtes', data:Object.values(data.by_provider||{}), backgroundColor:'rgba(245,158,11,0.55)', borderColor:'#f59e0b', borderWidth:1, borderRadius:5 }] }, options:chartOpts });
     charts.profiles  = new Chart(ctxR, { type:'doughnut', data:{ labels:Object.keys(data.by_profile||{}), datasets:[{ data:Object.values(data.by_profile||{}), backgroundColor:['#f59e0b','#10b981','#6366f1','#ef4444','#a78bfa','#38bdf8','#34d399'], borderWidth:0 }] }, options:{ plugins:{ legend:{ labels:{ color:'#888', font:{ family:'Syne' } } } }, cutout:'68%' } });
+    } catch (e) {
+      console.error('refreshStats error:', e);
+      document.getElementById('kpi').innerHTML = '<div style="color:var(--red); padding:20px; text-align:center">Erreur: ' + e.message + '</div>';
+    }
   }
 
   /* ─── PRESETS ─── */
@@ -221,27 +256,183 @@
   }
 
   async function loadPresets() {
-    const data = await api('/api/presets');
-    document.getElementById('presetList').innerHTML = data.items.map(p => `
-      <div class="preset-card">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start">
-          <div>
-            <div class="preset-title">${p.name}</div>
-            <div class="preset-desc">${p.description || ''}</div>
+    // Hide skeleton, show content
+    const skeleton = document.getElementById('presetsSkeleton');
+    const content = document.getElementById('presetsContent');
+    const error = document.getElementById('presetsError');
+
+    try {
+      const data = await api('/api/presets');
+
+      // Hide skeleton, show content
+      if (skeleton) skeleton.style.display = 'none';
+      if (content) content.style.display = 'grid';
+      if (error) error.style.display = 'none';
+
+      document.getElementById('presetList').innerHTML = data.items.map(p => `
+        <div class="preset-card" role="listitem">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start">
+            <div>
+              <div class="preset-title">${escapeHtml(p.name)}</div>
+              <div class="preset-desc">${escapeHtml(p.description || '')}</div>
+            </div>
+            <div class="flex-row" style="gap:4px; flex-shrink:0" role="group" aria-label="Actions pour ${p.name}">
+              <button onclick="applyPreset(${p.id})" class="primary" style="font-size:11px; padding:5px 10px" aria-label="Appliquer ${p.name}">▶</button>
+              <button onclick="editPreset(${p.id})" class="ghost" style="font-size:11px; padding:5px 8px" aria-label="Modifier ${p.name}">✏️</button>
+              <button onclick="deletePreset(${p.id})" class="danger" style="font-size:11px; padding:5px 8px" aria-label="Supprimer ${p.name}">🗑</button>
+            </div>
           </div>
-          <div class="flex-row" style="gap:4px; flex-shrink:0">
-            <button onclick="applyPreset(${p.id})" class="primary" style="font-size:11px; padding:5px 10px">▶ Appliquer</button>
-            <button onclick="editPreset(${p.id})" class="ghost" style="font-size:11px; padding:5px 8px">✏️</button>
-            <button onclick="deletePreset(${p.id})" class="danger" style="font-size:11px; padding:5px 8px">🗑</button>
-          </div>
-        </div>
-      </div>`).join('') || '<div style="color:var(--text-muted); font-size:12px; padding:12px 0">Aucun preset sauvegardé. Créez-en un !</div>';
-    if (data.items.length) {
-      buildPresetDraft(data.items[0].data);
-      document.getElementById('presetName').value = data.items[0].name;
-      document.getElementById('presetDesc').value = data.items[0].description || '';
-      renderPresetEditor();
+        </div>`).join('') || '<div style="color:var(--text-muted); font-size:12px; padding:12px 0">Aucune configuration sauvegardée. Créez-en une !</div>';
+
+      if (data.items.length) {
+        buildPresetDraft(data.items[0].data);
+        document.getElementById('presetName').value = data.items[0].name;
+        document.getElementById('presetDesc').value = data.items[0].description || '';
+        renderPresetEditor();
+        renderPresetPreview();
+      }
+    } catch (err) {
+      // Show error state
+      if (skeleton) skeleton.style.display = 'none';
+      if (content) content.style.display = 'none';
+      if (error) error.style.display = 'flex';
     }
+  }
+
+  // Template configurations - fetch models dynamically from API
+  async function loadTemplate(name) {
+    // Show loading
+    showNotification('Chargement des modèles...');
+
+    try {
+      // Fetch models from all sources in parallel
+      const [ollama, openrouter, nvidia, local] = await Promise.all([
+        api('/api/catalogue/ollama').catch(() => ({ models: [] })),
+        api('/api/catalogue/openrouter').catch(() => ({ models: [] })),
+        api('/api/catalogue/nvidia').catch(() => ({ models: [] })),
+        api('/api/catalogue/local').catch(() => ({ models: [] }))
+      ]);
+
+      // Build model lists by category
+      const getModelName = (m) => m.id || m.name || '';
+      const openrouterModels = (openrouter.models || []).map(m => ({ id: `openrouter:${getModelName(m)}`, name: getModelName(m), free: m.id?.includes(':free') }));
+      const nvidiaModels = (nvidia.models || []).map(m => ({ id: `nvidia:${getModelName(m)}`, name: getModelName(m), free: false }));
+      const localModels = (local.models || []).map(m => ({ id: `local:${getModelName(m)}`, name: getModelName(m), free: true }));
+      const ollamaCloudModels = (ollama.models || []).filter(m => (m.tags || []).includes('cloud')).map(m => ({ id: `ollama_cloud:${getModelName(m)}`, name: getModelName(m), free: false }));
+
+      // Build template data based on name
+      let templateData = {};
+
+      switch (name) {
+        case 'free':
+          // Free models from OpenRouter
+          templateData = {
+            coding: { models: openrouterModels.filter(m => m.name.includes('coder') || m.name.includes('code')).slice(0, 3).map(m => m.id), lock_top: false },
+            reasoning: { models: openrouterModels.filter(m => m.name.includes('r1') || m.name.includes('reasoning')).slice(0, 2).map(m => m.id), lock_top: false },
+            chat: { models: openrouterModels.filter(m => m.free).slice(0, 4).map(m => m.id), lock_top: false },
+            long: { models: openrouterModels.filter(m => m.name.includes('long') || m.name.includes('32b') || m.name.includes('70b')).slice(0, 2).map(m => m.id), lock_top: false },
+            vision: { models: openrouterModels.filter(m => m.name.includes('vl') || m.name.includes('vision')).slice(0, 2).map(m => m.id), lock_top: false },
+            audio: { models: [], lock_top: false },
+            translate: { models: openrouterModels.filter(m => m.name.includes('translate')).slice(0, 2).map(m => m.id), lock_top: false }
+          };
+          break;
+        case 'power':
+          // Premium models (NVIDIA, Ollama Cloud, Google)
+          templateData = {
+            coding: { models: [...ollamaCloudModels.filter(m => m.name.includes('m2') || m.name.includes('coder')).slice(0, 2).map(m => m.id), ...nvidiaModels.filter(m => m.name.includes('m2') || m.name.includes('coder')).slice(0, 2).map(m => m.id)], lock_top: false },
+            reasoning: { models: [...ollamaCloudModels.filter(m => m.name.includes('m2') || m.name.includes('qwen')).slice(0, 2).map(m => m.id), ...nvidiaModels.filter(m => m.name.includes('deepseek') || m.name.includes('v3')).slice(0, 2).map(m => m.id)], lock_top: false },
+            chat: { models: [...nvidiaModels.slice(0, 2).map(m => m.id), ...ollamaCloudModels.slice(0, 2).map(m => m.id)], lock_top: false },
+            long: { models: [...nvidiaModels.filter(m => m.name.includes('m2') || m.name.includes('llama')).slice(0, 2).map(m => m.id), ...ollamaCloudModels.slice(0, 2).map(m => m.id)], lock_top: false },
+            vision: { models: [...nvidiaModels.filter(m => m.name.includes('vision') || m.name.includes('llama3')).slice(0, 2).map(m => m.id), ...ollamaCloudModels.filter(m => m.name.includes('kimi') || m.name.includes('vision')).slice(0, 2).map(m => m.id)], lock_top: false },
+            audio: { models: [], lock_top: false },
+            translate: { models: nvidiaModels.filter(m => m.name.includes('riva') || m.name.includes('translate')).slice(0, 2).map(m => m.id), lock_top: false }
+          };
+          break;
+        case 'local':
+          // Only local Ollama models
+          templateData = {
+            coding: { models: localModels.filter(m => m.name.includes('coder')).slice(0, 3).map(m => m.id), lock_top: false },
+            reasoning: { models: localModels.filter(m => m.name.includes('reasoning') || m.name.includes('32b') || m.name.includes('70b')).slice(0, 2).map(m => m.id), lock_top: false },
+            chat: { models: localModels.slice(0, 4).map(m => m.id), lock_top: false },
+            long: { models: localModels.filter(m => m.name.includes('32b') || m.name.includes('70b')).slice(0, 2).map(m => m.id), lock_top: false },
+            vision: { models: localModels.filter(m => m.name.includes('vision') || m.name.includes('ocr')).slice(0, 2).map(m => m.id), lock_top: false },
+            audio: { models: [], lock_top: false },
+            translate: { models: localModels.filter(m => m.name.includes('translate')).slice(0, 2).map(m => m.id), lock_top: false }
+          };
+          break;
+        case 'balanced':
+          // Mix of free + local
+          templateData = {
+            coding: { models: [...ollamaCloudModels.slice(0, 1).map(m => m.id), ...openrouterModels.filter(m => m.free).slice(0, 2).map(m => m.id), ...localModels.filter(m => m.name.includes('coder')).slice(0, 1).map(m => m.id)], lock_top: false },
+            reasoning: { models: [...openrouterModels.filter(m => m.free && m.name.includes('r1')).slice(0, 1).map(m => m.id), ...localModels.filter(m => m.name.includes('32b') || m.name.includes('70b')).slice(0, 1).map(m => m.id)], lock_top: false },
+            chat: { models: [...localModels.slice(0, 2).map(m => m.id), ...openrouterModels.filter(m => m.free).slice(0, 2).map(m => m.id)], lock_top: false },
+            long: { models: [...localModels.filter(m => m.name.includes('32b') || m.name.includes('70b')).slice(0, 1).map(m => m.id), ...openrouterModels.filter(m => m.free).slice(0, 1).map(m => m.id)], lock_top: false },
+            vision: { models: [...openrouterModels.filter(m => m.free && m.name.includes('vl')).slice(0, 1).map(m => m.id), ...localModels.filter(m => m.name.includes('vision') || m.name.includes('ocr')).slice(0, 1).map(m => m.id)], lock_top: false },
+            audio: { models: [], lock_top: false },
+            translate: { models: localModels.filter(m => m.name.includes('translate')).slice(0, 2).map(m => m.id), lock_top: false }
+          };
+          break;
+        default:
+          return;
+      }
+
+      // Apply template
+      buildPresetDraft(templateData);
+
+      // Set template name/description
+      const templateNames = {
+        free: 'Mode Gratuit',
+        power: 'Mode Puissance',
+        local: 'Mode Local',
+        balanced: 'Mode Équilibré'
+      };
+      const templateDescs = {
+        free: 'Modèles gratuits uniquement',
+        power: 'Meilleurs modèles premium',
+        local: 'Uniquement modèles locaux',
+        balanced: 'Mix gratuit + local'
+      };
+
+      document.getElementById('presetName').value = templateNames[name];
+      document.getElementById('presetDesc').value = templateDescs[name];
+      renderPresetEditor();
+      renderPresetPreview();
+      showNotification(`Template "${templateNames[name]}" chargé avec ${Object.values(templateData).reduce((acc, p) => acc + (p.models?.length || 0), 0)} modèles!`);
+
+    } catch (err) {
+      console.error('Error loading template:', err);
+      showNotification('Erreur lors du chargement des modèles');
+    }
+  }
+
+  function renderPresetPreview() {
+    const preview = document.getElementById('presetPreview');
+    if (!preview || !presetDraft?.profiles) {
+      if (preview) preview.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center">Sélectionnez une config pour voir l\'aperçu</div>';
+      return;
+    }
+
+    const profileEmojis = { coding:'💻', reasoning:'🧠', chat:'💬', long:'📄', vision:'👁️', audio:'🎵', translate:'🌍' };
+    const profiles = Object.entries(presetDraft.profiles);
+
+    if (profiles.length === 0) {
+      preview.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center">Créez une configuration pour voir l\'aperçu</div>';
+      return;
+    }
+
+    preview.innerHTML = profiles.map(([profile, data]) => {
+      const models = data.models || [];
+      const emoji = profileEmojis[profile] || '⚡';
+      return `
+        <div style="margin-bottom:12px; padding:8px; background:var(--surface2); border-radius:var(--r-sm)">
+          <div style="font-weight:600; color:#fff; margin-bottom:4px">${emoji} ${profile}</div>
+          <div style="color:var(--text-dim); font-size:10px; margin-bottom:4px">
+            ${models.length ? models.map(m => `<span style="display:inline-block; background:var(--surface); padding:2px 6px; border-radius:3px; margin:2px 2px 0 0; font-family:var(--font-mono)">${m}</span>`).join('') : '<em>Aucun modèle</em>'}
+          </div>
+          ${data.lock_top ? '<span style="font-size:10px; color:var(--accent)">🔒 Lock top</span>' : ''}
+        </div>
+      `;
+    }).join('');
   }
 
   function onDragStart(profile, index) { event.dataTransfer.setData('text/plain', `${profile}:${index}`); }
@@ -500,6 +691,26 @@
     }
   }
 
+  async function resetKeyErrorsAdmin() {
+    showConfirm(
+      'Réinitialiser erreurs clés',
+      "Cette action va déverrouiller toutes les clés bloquées et effacer les quotas journaliers d'aujourd'hui. Continuer ?",
+      'Réinitialiser',
+      async () => {
+        setMaintenanceStatus("Réinitialisation des erreurs de clés en cours...");
+        try {
+          const createBackup = !!document.getElementById('maintenanceAutoBackup')?.checked;
+          await api('/api/keys/reset-errors', 'POST', { create_backup: createBackup });
+          await refreshStats();
+          await refreshRouting();
+          setMaintenanceStatus('✅ Erreurs de clés réinitialisées.', 'success');
+        } catch (err) {
+          setMaintenanceStatus(`❌ Impossible: ${err.message}`, 'error');
+        }
+      }
+    );
+  }
+
   /* ─── SCHEDULES ─── */
   async function addSchedule() {
     await api('/api/schedules', 'POST', {
@@ -603,8 +814,90 @@
   async function dismissSuggestion(i)             { await api(`/api/suggestions/${i}/dismiss`, 'POST'); refreshRouting(); }
   async function runAllTests()                    { const res = await api('/api/tests/run', 'POST'); renderTests(res.results); }
   async function exportTestResults()              { const res = await api('/api/tests/results'); const blob = new Blob([JSON.stringify(res,null,2)]); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tests.json'; a.click(); }
-  async function startBenchmark()                 { await api('/api/benchmark/start', 'POST', {}); }
-  async function stopBenchmark()                  { await api('/api/benchmark/stop', 'POST'); }
+
+  // Benchmark polling
+  let benchmarkPollInterval = null;
+
+  async function pollBenchmarkResults() {
+    try {
+      const res = await api('/api/benchmark/results');
+      renderBenchmarkResults(res);
+      if (res.running === false || res.done) {
+        clearInterval(benchmarkPollInterval);
+        benchmarkPollInterval = null;
+        const stopBtn = document.getElementById('stopBenchBtn');
+        const startBtn = document.getElementById('startBenchBtn');
+        if (stopBtn) stopBtn.disabled = true;
+        if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Lancer le benchmark'; }
+      }
+    } catch (err) {
+      console.error('Poll error:', err);
+    }
+  }
+
+  function renderBenchmarkResults(data) {
+    const container = document.getElementById('benchTable');
+    if (!container) return;
+    if (!data.results || data.results.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted)">En cours...</div>';
+      return;
+    }
+    container.innerHTML = data.results.map(r => `
+      <div class="card" style="margin-bottom:8px">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <div>
+            <div style="font-weight:600">${r.model || r.provider}</div>
+            <div style="font-size:11px; color:var(--text-dim)">${r.provider}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px; font-weight:700; color:var(--accent)">${r.tokens_per_second ? r.tokens_per_second.toFixed(1) + ' tok/s' : '—'}</div>
+            <div style="font-size:11px; color:var(--text-dim)">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function startBenchmark() {
+    console.log('Starting benchmark...');
+    try {
+      const startBtn = document.getElementById('startBenchBtn');
+      const stopBtn = document.getElementById('stopBenchBtn');
+      if (startBtn) { startBtn.disabled = true; startBtn.textContent = '⏳ Lancement...'; }
+      const res = await api('/api/benchmark/start', 'POST', {});
+      console.log('Benchmark started:', res);
+      if (stopBtn) stopBtn.disabled = false;
+      if (startBtn) startBtn.textContent = 'Benchmark en cours...';
+      // Start polling for results
+      if (benchmarkPollInterval) clearInterval(benchmarkPollInterval);
+      benchmarkPollInterval = setInterval(pollBenchmarkResults, 2000);
+      pollBenchmarkResults(); // Immediate first poll
+    } catch (err) {
+      console.error('Benchmark error:', err);
+      alert('Erreur: ' + err.message);
+      const startBtn = document.getElementById('startBenchBtn');
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Lancer le benchmark'; }
+    }
+  }
+  async function stopBenchmark() {
+    console.log('Stopping benchmark...');
+    try {
+      if (benchmarkPollInterval) {
+        clearInterval(benchmarkPollInterval);
+        benchmarkPollInterval = null;
+      }
+      const res = await api('/api/benchmark/stop', 'POST');
+      console.log('Benchmark stopped:', res);
+      const stopBtn = document.getElementById('stopBenchBtn');
+      const startBtn = document.getElementById('startBenchBtn');
+      if (stopBtn) stopBtn.disabled = true;
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Lancer le benchmark'; }
+      alert('Benchmark arrêté!');
+    } catch (err) {
+      console.error('Stop benchmark error:', err);
+      alert('Erreur: ' + err.message);
+    }
+  }
   async function exportStats()                    { const res = await fetch('/api/stats/export'); const csv = await res.text(); const blob = new Blob([csv], {type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='stats.csv'; a.click(); }
   async function exportLogs()                     { const data = await api('/api/logs/export'); const blob = new Blob([JSON.stringify(data.items,null,2)], {type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rotator-logs.json'; a.click(); }
   function clearLogs()                            { logsCache = []; renderLogs(); }

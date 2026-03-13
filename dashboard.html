@@ -11,8 +11,9 @@
     href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap"
     rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/css/dashboard.css" />
-  <link rel="stylesheet" href="/static/css/copilot.css" />
+  <!--<link rel="stylesheet" href="/static/css/dashboard.css" />-->
+  <!--<link rel="stylesheet" href="/static/css/copilot.css" />-->
+  <link rel="stylesheet" href="/static/css/dashboard-neon.css" />
 </head>
 
 <body>
@@ -788,6 +789,7 @@
               </div>
               <div class="flex-row" style="gap:8px">
                 <button onclick="showEditProjectModal()">Modifier</button>
+                <button class="accent" onclick="showProjectConfigPanel()">⚙️ Config</button>
                 <button class="danger" onclick="deleteProjectFromDetail()">Supprimer</button>
               </div>
             </div>
@@ -829,20 +831,43 @@
                 <div id="projectDetailUpdated" style="font-size:14px"></div>
               </div>
             </div>
-            <div style="margin-bottom:16px">
-              <div class="flex-row" style="align-items:center; gap:12px; margin-bottom:12px">
-                <div style="font-size:14px; font-weight:600">Historique d'utilisation</div>
-                <select id="projectUsageRange" onchange="loadProjectUsage()" style="width:140px; font-size:12px">
-                  <option value="7">7 derniers jours</option>
-                  <option value="30" selected>30 derniers jours</option>
-                </select>
+            <div style="display:grid; grid-template-columns: 1fr 300px; gap:20px; margin-bottom:16px">
+              <div>
+                <div class="flex-row" style="align-items:center; gap:12px; margin-bottom:12px">
+                  <div style="font-size:14px; font-weight:600">Historique d'utilisation</div>
+                  <select id="projectUsageRange" onchange="loadProjectUsage()" style="width:140px; font-size:12px">
+                    <option value="7">7 derniers jours</option>
+                    <option value="30" selected>30 derniers jours</option>
+                  </select>
+                </div>
+                <canvas id="projectUsageChart" style="max-height:200px"></canvas>
+                <div id="projectUsageTotal" style="margin-top:12px; font-size:13px; color:var(--text-dim)"></div>
               </div>
-              <canvas id="projectUsageChart" style="max-height:200px"></canvas>
-              <div id="projectUsageTotal" style="margin-top:12px; font-size:13px; color:var(--text-dim)"></div>
+              <div>
+                <div class="flex-row" style="align-items:center; justify-content:space-between; margin-bottom:12px">
+                  <div style="font-size:14px; font-weight:600">Logs Temps Réel</div>
+                  <button class="ghost" onclick="clearProjectLogs()" style="font-size:10px; padding:2px 6px">✕</button>
+                </div>
+                <div id="projectLogsContainer" style="background:var(--bg2); border-radius:6px; padding:8px; height:220px; overflow-y:auto; font-size:11px; font-family:monospace">
+                  <div style="color:var(--text-dim); text-align:center; padding:20px">En attente dactivite...</div>
+                </div>
+              </div>
             </div>
             <div class="flex-row" style="gap:8px">
               <button onclick="copyProjectToken()">Copier token</button>
               <button onclick="launchClaudeWithProject()">Ouvrir Claude Code</button>
+              <button onclick="openFluxVisuel()" style="
+                background: linear-gradient(135deg, rgba(0,230,118,0.10), rgba(56,189,248,0.08));
+                border: 1px solid rgba(0,230,118,0.35);
+                color: #00e676;
+                font-weight: 700;
+                letter-spacing: .04em;
+                box-shadow: 0 0 12px rgba(0,230,118,0.18), inset 0 0 10px rgba(0,230,118,0.04);
+                transition: all .2s;
+              " onmouseover="this.style.boxShadow='0 0 22px rgba(0,230,118,0.45), inset 0 0 16px rgba(0,230,118,0.08)'; this.style.borderColor='rgba(0,230,118,0.7)'"
+                 onmouseout="this.style.boxShadow='0 0 12px rgba(0,230,118,0.18), inset 0 0 10px rgba(0,230,118,0.04)'; this.style.borderColor='rgba(0,230,118,0.35)'">
+                ⚡ Flux Visuel
+              </button>
               <button id="projectRevokeBtn" class="danger" onclick="revokeProjectFromDetail()">Revoquer token</button>
             </div>
           </div>
@@ -1137,6 +1162,9 @@
             <button class="subtab oc-tab" onclick="showOCTab('tools')">🔧 Tools</button>
             <button class="subtab oc-tab" onclick="showOCTab('config')">⚙️ Config</button>
             <button class="subtab oc-tab" onclick="showOCTab('doctor')">🩺 Doctor</button>
+            <button class="subtab oc-tab" onclick="showOCTab('memory')">🧠 Mémoire</button>
+            <button class="subtab oc-tab" onclick="showOCTab('chat')">💬 Chat</button>
+            <button class="subtab oc-tab" onclick="showOCTab('hooks')">🔗 Hooks</button>
             <button class="subtab oc-tab" onclick="showOCTab('guide')">📖 Guide</button>
           </div>
         </div>
@@ -1204,7 +1232,28 @@
           </div>
         </div>
 
-        <!-- 10. Guide -->
+        <!-- 10. Memory -->
+        <div id="oc-memory" class="oc-section" style="display:none">
+          <div id="ocMemoryContent">
+            <div style="color:var(--text-dim)">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- 11. Chat -->
+        <div id="oc-chat" class="oc-section" style="display:none">
+          <div id="ocChatContent">
+            <div style="color:var(--text-dim)">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- 12. Hooks -->
+        <div id="oc-hooks" class="oc-section" style="display:none">
+          <div id="ocHooksContent">
+            <div style="color:var(--text-dim)">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- 13. Guide -->
         <div id="oc-guide" class="oc-section" style="display:none">
           <div class="card">
             <div class="card-title">🦞 Qu'est-ce qu'OpenClaw ?</div>
@@ -1337,7 +1386,10 @@
                 <input id="purgeBeforeDate" type="date" style="width:auto; flex:1" />
                 <button onclick="purgeDataBeforeDate()">🗑 Purger avant date</button>
               </div>
-              <button class="danger" onclick="resetAllData()">♻ Réinitialiser toutes les données</button>
+              <div style="display:flex; gap:8px; margin-top:6px">
+                <button class="danger" onclick="resetAllData()">♻ Réinitialiser toutes les données</button>
+                <button class="primary" onclick="resetKeyErrorsAdmin()">🔁 Réinitialiser erreurs clés</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1673,6 +1725,27 @@
             <button class="ghost" onclick="loadMyModels()" style="font-size:11px; padding:4px 10px">↺ Actualiser</button>
           </div>
           <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px">Tous les modèles disponibles dans la base de données - classés par providers ou par profils</div>
+
+          <!-- Search & Filter Bar -->
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+              <input id="mymodels-search" placeholder="Rechercher un modèle..." style="flex:1; min-width:180px; width:auto"
+                oninput="filterMyModels()" />
+              <select id="mymodels-filter-provider" onchange="filterMyModels()" style="width:140px">
+                <option value="">Tous providers</option>
+              </select>
+              <select id="mymodels-filter-install" onchange="filterMyModels()" style="width:140px">
+                <option value="">Tous</option>
+                <option value="installed">✅ Installés</option>
+                <option value="not-installed">⚪ Non installés</option>
+              </select>
+              <select id="mymodels-sort" onchange="filterMyModels()" style="width:150px">
+                <option value="name-asc">Nom A → Z</option>
+                <option value="name-desc">Nom Z → A</option>
+                <option value="provider">Provider</option>
+              </select>
+            </div>
+          </div>
 
           <!-- View Toggle -->
           <div class="subtabs" style="margin-bottom:14px">
@@ -2631,6 +2704,42 @@ Jours  : all</pre>
     </div>
   </div>
 
+  <!-- Project Config Side Panel -->
+  <div id="projectConfigPanel" class="side-panel" style="display:none">
+    <div class="side-panel-header">
+      <div class="side-panel-title">⚙️ Config Projet</div>
+      <button class="ghost" onclick="closeProjectConfigPanel()">✕</button>
+    </div>
+    <div class="side-panel-body">
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">PROVIDER ACTUEL</div>
+        <div id="configCurrentProvider" style="font-size:14px; font-weight:600">-</div>
+        <div id="configCurrentModel" style="font-size:12px; color:var(--accent)">-</div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">ÉTAT DES CLÉS</div>
+        <div id="configKeysStatus" class="flex-col" style="gap:6px"></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">ORDRE DES PROVIDERS</div>
+        <div id="configProviderOrder" class="flex-col" style="gap:4px"></div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">ACTIONS</div>
+        <div class="flex-col" style="gap:8px">
+          <button onclick="skipToNextKey()">⏭ Passer à la clé suivante</button>
+          <button onclick="resetKeyErrors()">🔄 Réinitialiser les erreurs</button>
+          <button class="danger" onclick="lockToCurrentProvider()">🔒 Verrouiller ce provider</button>
+          <button onclick="unlockProvider()">🔓 Déverrouiller</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="projectConfigBackdrop" class="modal-backdrop" style="display:none" onclick="closeProjectConfigPanel()"></div>
+
   <div class="modal" id="lockModal">
     <div class="modal-box">
       <div class="modal-header">
@@ -2724,7 +2833,6 @@ Jours  : all</pre>
     if (modal) modal.style.display = 'none';
   }
   </script>
-
   <script src="/static/js/state.js"></script>
   <script src="/static/js/tabs.js"></script>
   <script src="/static/js/helpers.js"></script>
@@ -2733,6 +2841,294 @@ Jours  : all</pre>
   <script src="/static/js/keys.js"></script>
   <script src="/static/js/pages.js"></script>
   <script src="/static/js/init.js"></script>
+  <script>
+  // Project Config Panel Functions
+  let currentProjectProfile = null;
+
+  async function showProjectConfigPanel() {
+    const panel = document.getElementById('projectConfigPanel');
+    const backdrop = document.getElementById('projectConfigBackdrop');
+    if (!panel || !backdrop) return;
+
+    panel.style.display = 'flex';
+    backdrop.style.display = 'block';
+
+    // Get current project info from the detail view
+    const projectName = document.getElementById('projectDetailName')?.textContent || '';
+    currentProjectId = await getProjectIdByName(projectName);
+
+    if (currentProjectId) {
+      await loadProjectConfig();
+    }
+  }
+
+  function closeProjectConfigPanel() {
+    const panel = document.getElementById('projectConfigPanel');
+    const backdrop = document.getElementById('projectConfigBackdrop');
+    if (panel) panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+  }
+
+  async function getProjectIdByName(name) {
+    try {
+      const data = await api('/api/projects');
+      const project = (data.items || []).find(p => p.name === name);
+      return project ? project.id : null;
+    } catch { return null; }
+  }
+
+  async function loadProjectConfig() {
+    if (!currentProjectId) return;
+
+    try {
+      // Get project details
+      const project = await api(`/api/projects/${currentProjectId}`);
+
+      // Get active routes and key status
+      const status = await api('/api/status');
+
+      // Update current provider display
+      const currentProviderEl = document.getElementById('configCurrentProvider');
+      const currentModelEl = document.getElementById('configCurrentModel');
+
+      // Use current selected profile from config panel
+      const profile = window._currentConfigProfile || 
+        (project.allowed_profiles ? project.allowed_profiles.split(',')[0].trim() : 'coding');
+      const route = status.active_routes?.[profile];
+      if (currentProviderEl && route) {
+        currentProviderEl.textContent = route.provider || '-';
+        currentModelEl.textContent = route.model || '-';
+      } else if (currentProviderEl) {
+        currentProviderEl.textContent = '-';
+        currentModelEl.textContent = '-';
+      }
+
+      // Load key status
+      const keysStatusEl = document.getElementById('configKeysStatus');
+      if (keysStatusEl && status.key_status) {
+        let html = '';
+        for (const [provider, data] of Object.entries(status.key_status)) {
+          for (const key of (data.keys || [])) {
+            html += `<div class="config-key-status">
+              <span class="config-key-dot ${key.state}"></span>
+              <span style="flex:1">${key.label}</span>
+              <span style="color:var(--text-muted)">${key.rpm || 0}/min</span>
+            </div>`;
+          }
+        }
+        keysStatusEl.innerHTML = html || '<div style="color:var(--text-dim)">Aucune clé</div>';
+      }
+
+      // Load provider order with tabs for each profile
+      const providerOrderEl = document.getElementById('configProviderOrder');
+      if (providerOrderEl) {
+        const chains = await api('/api/routing/chains');
+        const allowedProfiles = project.allowed_profiles;
+        const profiles = (!allowedProfiles || allowedProfiles === 'all') ? Object.keys(chains) : (allowedProfiles.split(',').map(p => p.trim())) || ['coding'];
+
+        // Store for later use
+        window._configChains = chains;
+        window._configProfiles = profiles;
+
+        // Show tabs for each profile
+        let tabsHtml = '<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">';
+        profiles.forEach((p, idx) => {
+          tabsHtml += `<button class="ghost" onclick="switchConfigProfile('${p}')" style="font-size:11px;padding:4px 8px;border-radius:4px" id="configTab_${p}">${p}</button>`;
+        });
+        tabsHtml += '</div>';
+        providerOrderEl.innerHTML = tabsHtml + '<div id="configChainContent"></div>';
+
+        // Load first profile
+        if (profiles.length > 0) {
+          window._currentConfigProfile = profiles[0];
+          await renderConfigChain(chains[profiles[0]] || [], status.active_routes);
+        }
+      }
+
+    } catch (err) {
+      console.error('Failed to load project config:', err);
+    }
+  }
+
+  async function skipToNextKey() {
+    if (!currentProjectId) return;
+    try {
+      await api('/api/override/reset', 'POST', {});
+      await loadProjectConfig();
+      alert('Clé suivante activée');
+    } catch (err) { alert('Erreur: ' + err.message); }
+  }
+
+  async function resetKeyErrors() {
+    if (!currentProjectId) return;
+    try {
+      await api('/api/override/reset', 'POST', {});
+      await loadProjectConfig();
+      alert('Erreurs réinitialisées');
+    } catch (err) { alert('Erreur: ' + err.message); }
+  }
+
+  async function lockToCurrentProvider() {
+    if (!currentProjectId) return;
+    const providerEl = document.getElementById('configCurrentProvider');
+    const provider = providerEl?.textContent;
+    if (!provider) return;
+
+    try {
+      const profile = currentProjectProfile || 'coding';
+      await api('/api/lock', 'POST', { profile, provider });
+      alert(`Provider verrouillé sur ${provider}`);
+    } catch (err) { alert('Erreur: ' + err.message); }
+  }
+
+  async function unlockProvider() {
+    if (!currentProjectId) return;
+    try {
+      const profile = currentProjectProfile || 'coding';
+      await api(`/api/lock/${profile}`, 'DELETE');
+      alert('Provider déverrouillé');
+      await loadProjectConfig();
+    } catch (err) { alert('Erreur: ' + err.message); }
+  }
+
+  // ========== PROJECT REAL-TIME LOGS ==========
+  let projectLogsInterval = null;
+  let lastLogCount = 0;
+
+  function clearProjectLogs() {
+    const container = document.getElementById('projectLogsContainer');
+    if (container) {
+      container.innerHTML = "<div style=\"color:var(--text-dim); text-align:center; padding:20px\">En attente d'activite...</div>";
+      lastLogCount = 0;
+    }
+  }
+
+  async function startProjectLogs(projectId) {
+    stopProjectLogs();
+    lastLogCount = 0;
+    await updateProjectLogs();
+    projectLogsInterval = setInterval(() => updateProjectLogs(), 2000);
+  }
+
+  function stopProjectLogs() {
+    if (projectLogsInterval) {
+      clearInterval(projectLogsInterval);
+      projectLogsInterval = null;
+    }
+  }
+
+  async function updateProjectLogs() {
+    const container = document.getElementById('projectLogsContainer');
+    if (!container || !currentProjectId) return;
+
+    try {
+      const status = await api('/api/status');
+      const logs = status.logs || [];
+      
+      // Filter logs for current project (if we can identify them)
+      // For now, show recent global logs
+      const recentLogs = logs.slice(-20).reverse();
+      
+      if (recentLogs.length === lastLogCount) return;
+      lastLogCount = recentLogs.length;
+
+      let html = '';
+      recentLogs.forEach(log => {
+        let time = 'Invalid Date';
+        try {
+          if (log.time) {
+            const timestamp = typeof log.time === 'string' ? parseFloat(log.time) : log.time;
+            if (!isNaN(timestamp)) {
+              time = new Date(timestamp * 1000).toLocaleTimeString('fr-FR');
+            }
+          }
+        } catch (e) {
+          // Keep 'Invalid Date'
+        }
+        
+        const level = log.level || 'info';
+        const msg = log.message || '';
+        
+        let color = 'var(--text)';
+        let icon = '•';
+        
+        if (level === 'error' || msg.includes('error') || msg.includes('failed')) {
+          color = 'var(--red)';
+          icon = '✕';
+        } else if (level === 'warn' || msg.includes('warn')) {
+          color = 'var(--amber)';
+          icon = '⚠';
+        } else if (msg.includes('rotation') || msg.includes('key') || msg.includes('provider')) {
+          color = 'var(--accent)';
+          icon = '↻';
+        } else if (msg.includes('success') || msg.includes('ok') || msg.includes('started')) {
+          color = 'var(--green)';
+          icon = '•';
+        }
+        
+        html += `<div style="color:${color}; padding:2px 0; border-bottom:1px solid var(--border)">
+          <span style="color:var(--text-dim)">${time}</span> ${icon} ${escapeHtml(msg.substring(0, 80))}
+        </div>`;
+      });
+
+      if (html) {
+        container.innerHTML = html;
+      }
+    } catch (err) {
+      // Silently fail
+    }
+  }
+
+  // Update showProjectDetail to start logs
+  const originalShowProjectDetail = window.showProjectDetail;
+  window.showProjectDetail = async function(projectId) {
+    if (originalShowProjectDetail) await originalShowProjectDetail(projectId);
+    startProjectLogs(projectId);
+  };
+
+  const originalShowProjectsList = window.showProjectsList;
+  window.showProjectsList = function() {
+    stopProjectLogs();
+    if (originalShowProjectsList) originalShowProjectsList();
+  };
+
+  async function switchConfigProfile(profile) {
+    window._currentConfigProfile = profile;
+    const profiles = window._configProfiles || [];
+    profiles.forEach(p => {
+      const btn = document.getElementById('configTab_' + p);
+      if (btn) btn.style.background = (p === profile) ? 'var(--accent)' : '';
+      if (btn) btn.style.color = (p === profile) ? '#000' : '';
+    });
+    const chains = window._configChains || {};
+    const status = await api('/api/status');
+    await renderConfigChain(chains[profile] || [], status.active_routes);
+  }
+
+  async function renderConfigChain(chain, activeRoutes) {
+    const container = document.getElementById('configChainContent');
+    if (!container) return;
+
+    const profile = window._currentConfigProfile || 'coding';
+    const currentRoute = activeRoutes?.[profile] || {};
+    const currentProvider = currentRoute.provider;
+    const currentModel = currentRoute.model;
+
+    let html = '';
+    chain.forEach((item, idx) => {
+      const isActive = (item.provider === currentProvider && item.model === currentModel);
+      html += `<div class="config-provider-item ${isActive ? 'active' : ''}" data-provider="${item.provider}" data-model="${item.model}" style="${isActive ? 'border-color:var(--accent);background:var(--surface3)' : ''}">
+        <span class="config-provider-drag">☰</span>
+        <span>${item.provider}</span>
+        <span style="color:var(--accent)">${item.model}</span>
+        ${isActive ? '<span style="margin-left:auto;color:var(--green)">✓</span>' : ''}
+      </div>`;
+    });
+    container.innerHTML = html || '<div style="color:var(--text-dim)">Aucune chaîne</div>';
+  }
+
+  </script>
+
   <footer style="text-align:center;padding:12px 0 18px;font-size:12px;color:var(--text-secondary,#888);opacity:.6">
     API Rotator &mdash; Made by <a href="https://github.com/Ivanor1st" target="_blank"
       style="color:inherit">Ivanor1st</a>
@@ -2790,9 +3186,21 @@ Jours  : all</pre>
     modelSelect.innerHTML = '<option value="">Chargement...</option>';
 
     try {
-      const data = await api('/api/db/models');
-      const allModels = data.models || data || [];
-      const providerModels = allModels.filter(m => m.provider_name === provider);
+      let providerModels = [];
+
+      if (provider === 'local') {
+        // For local provider, fetch from Ollama API
+        const localData = await api('/api/catalogue/local').catch(() => ({ models: [] }));
+        // Filter to only include downloaded models (with size) and exclude cloud models
+        providerModels = (localData.models || [])
+          .filter(m => m.size && m.size > 0 && !m.name.endsWith(':cloud'))
+          .map(m => ({ name: m.name, display_name: m.name, provider_name: 'local' }));
+      } else {
+        // For other providers, fetch from database
+        const data = await api('/api/db/models');
+        const allModels = data.models || data || [];
+        providerModels = allModels.filter(m => m.provider_name === provider);
+      }
 
       if (providerModels.length === 0) {
         modelSelect.innerHTML = '<option value="">Aucun modèle pour ce provider</option>';
@@ -2917,6 +3325,112 @@ Jours  : all</pre>
   // Current view
   let myModelsCurrentView = 'profiles';
 
+  // Expanded providers (to show all models)
+  let expandedProviders = new Set();
+
+  function toggleProviderExpand(providerName) {
+    if (expandedProviders.has(providerName)) {
+      expandedProviders.delete(providerName);
+    } else {
+      expandedProviders.add(providerName);
+    }
+    renderMyModels();
+  }
+
+  // Filter state
+  let myModelsFilter = {
+    search: '',
+    provider: '',
+    installed: '',
+    sort: 'name-asc'
+  };
+
+  // Populate provider filter dropdown
+  function populateProviderFilter() {
+    const select = document.getElementById('mymodels-filter-provider');
+    if (!select) return;
+
+    const providers = myModelsData.providers || [];
+    select.innerHTML = '<option value="">Tous providers</option>' +
+      providers.map(p => `<option value="${p.name}">${p.display_name || p.name}</option>`).join('');
+  }
+
+  // Filter and sort models
+  function filterMyModels() {
+    // Get filter values
+    myModelsFilter.search = document.getElementById('mymodels-search')?.value || '';
+    myModelsFilter.provider = document.getElementById('mymodels-filter-provider')?.value || '';
+    myModelsFilter.installed = document.getElementById('mymodels-filter-install')?.value || '';
+    myModelsFilter.sort = document.getElementById('mymodels-sort')?.value || 'name-asc';
+
+    // Re-render with filters
+    renderMyModels();
+  }
+
+  // Get filtered and sorted models (for both views)
+  function getFilteredModels() {
+    let models = [...myModelsData.models];
+    let routing = {};
+
+    // Apply search filter
+    if (myModelsFilter.search) {
+      const q = myModelsFilter.search.toLowerCase();
+      models = models.filter(m =>
+        (m.name || '').toLowerCase().includes(q) ||
+        (m.display_name || '').toLowerCase().includes(q) ||
+        (m.provider_name || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Apply provider filter
+    if (myModelsFilter.provider) {
+      models = models.filter(m => m.provider_name === myModelsFilter.provider);
+    }
+
+    // Apply installed filter
+    if (myModelsFilter.installed === 'installed') {
+      models = models.filter(m => m.exists_on_disk);
+    } else if (myModelsFilter.installed === 'not-installed') {
+      models = models.filter(m => !m.exists_on_disk);
+    }
+
+    // Sort models
+    models.sort((a, b) => {
+      switch (myModelsFilter.sort) {
+        case 'name-asc':
+          return (a.display_name || a.name || '').localeCompare(b.display_name || b.name || '');
+        case 'name-desc':
+          return (b.display_name || b.name || '').localeCompare(a.display_name || a.name || '');
+        case 'provider':
+          return (a.provider_name || '').localeCompare(b.provider_name || '');
+        default:
+          return 0;
+      }
+    });
+
+    // Also filter routing for profiles view
+    if (myModelsFilter.search || myModelsFilter.provider) {
+      for (const profileName in myModelsData.routing) {
+        let profileRouting = myModelsData.routing[profileName] || [];
+        if (myModelsFilter.search) {
+          const q = myModelsFilter.search.toLowerCase();
+          profileRouting = profileRouting.filter(item =>
+            (item.model || '').toLowerCase().includes(q) ||
+            (item.provider || '').toLowerCase().includes(q)
+          );
+        }
+        if (myModelsFilter.provider) {
+          profileRouting = profileRouting.filter(item => item.provider === myModelsFilter.provider);
+        }
+        routing[profileName] = profileRouting;
+      }
+    } else {
+      routing = myModelsData.routing;
+    }
+
+    return { models, routing };
+  }
+
   // Load my models data from API
   async function loadMyModels() {
     const statusEl = document.getElementById('mymodelsStatus');
@@ -2924,21 +3438,69 @@ Jours  : all</pre>
 
     try {
       // Fetch all data in parallel using the api function
-      const [providersData, profilesData, modelsData] = await Promise.all([
+      const [providersData, profilesData, modelsData, localData] = await Promise.all([
         api('/api/db/providers'),
         api('/api/db/profiles'),
-        api('/api/db/models')
+        api('/api/db/models'),
+        api('/api/catalogue/local').catch(() => ({ models: [] }))
       ]);
 
       myModelsData.providers = providersData.providers || providersData || [];
       myModelsData.profiles = profilesData.profiles || profilesData || [];
-      myModelsData.models = modelsData.models || modelsData || [];
+      let dbModels = modelsData.models || modelsData || [];
 
-      // Load routing for each profile
-      for (const profile of myModelsData.profiles) {
-        const routingData = await api(`/api/db/routing/${profile.name}`);
-        myModelsData.routing[profile.name] = routingData.routing || [];
+      // Get local provider ID
+      const localProvider = myModelsData.providers.find(p => p.name === 'local');
+      const localProviderId = localProvider ? localProvider.id : null;
+
+      // Add local models from Ollama (if available and have size)
+      if (localProviderId && localData.models && localData.models.length > 0) {
+        const localModelsFromOllama = localData.models
+          .filter(m => m.size && m.size > 0 && !m.name.endsWith(':cloud'))  // Only downloaded, exclude cloud
+          .map((m, idx) => ({
+            id: 10000 + idx,  // Temporary ID
+            provider_id: localProviderId,
+            provider_name: 'local',
+            name: m.name,
+            display_name: m.name,
+            context_window: m.context_length || 0,
+            supports_vision: m.vision || false,
+            supports_audio: false,
+            is_custom: false,
+            exists_on_disk: true,  // Always true since from ollama list
+            folder_id: null,
+            created_at: null
+          }));
+
+        // Merge with db models (local models take precedence if duplicates)
+        const dbModelNames = new Set(dbModels.map(m => m.name));
+        const newLocalModels = localModelsFromOllama.filter(m => !dbModelNames.has(m.name));
+        dbModels = [...dbModels, ...newLocalModels];
       }
+
+      // Deduplicate models by name
+      const seen = new Set();
+      dbModels = dbModels.filter(m => {
+        const key = `${m.provider_name}:${m.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      myModelsData.models = dbModels;
+
+      // Load routing for all profiles in PARALLEL (faster!)
+      const routingPromises = myModelsData.profiles.map(async (profile) => {
+        const routingData = await api(`/api/db/routing/${profile.name}`);
+        return { profile: profile.name, routing: routingData.routing || [] };
+      });
+      const routingResults = await Promise.all(routingPromises);
+      for (const result of routingResults) {
+        myModelsData.routing[result.profile] = result.routing;
+      }
+
+      // Populate filter dropdowns
+      populateProviderFilter();
 
       // Render the view
       renderMyModels();
@@ -2954,11 +3516,24 @@ Jours  : all</pre>
   function renderMyModels() {
     renderMyModelsSummary();
 
+    // Get filtered data
+    const filtered = getFilteredModels();
+
+    // Temporarily use filtered data
+    const originalModels = myModelsData.models;
+    const originalRouting = myModelsData.routing;
+    myModelsData.models = filtered.models;
+    myModelsData.routing = filtered.routing;
+
     if (myModelsCurrentView === 'providers') {
       renderMyModelsByProviders();
     } else {
       renderMyModelsByProfiles();
     }
+
+    // Restore original data
+    myModelsData.models = originalModels;
+    myModelsData.routing = originalRouting;
   }
 
   // Render summary cards
@@ -3012,6 +3587,8 @@ Jours  : all</pre>
     container.innerHTML = myModelsData.providers.map(provider => {
       const models = modelsByProvider[provider.name] || [];
       const displayName = provider.display_name || provider.name;
+      const isExpanded = expandedProviders.has(provider.name);
+      const displayModels = isExpanded ? models : models.slice(0, 5);
 
       // Get provider icon/color
       const providerInfo = getProviderInfo(provider.name);
@@ -3020,20 +3597,23 @@ Jours  : all</pre>
         <div class="card" style="margin-bottom:0">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
             <span style="font-size:20px">${providerInfo.icon}</span>
-            <div>
-              <div style="font-weight:700; font-size:14px">${displayName}</div>
+            <div style="cursor:pointer" onclick="toggleProviderExpand('${provider.name}')">
+              <div style="font-weight:700; font-size:14px">${displayName}${isExpanded ? ' ▼' : ' ▶'}</div>
               <div style="font-size:11px; color:var(--text-dim)">${models.length} modèles</div>
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:6px">
             ${models.length === 0 ? '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle</div>' : ''}
-            ${models.slice(0, 5).map(model => `
+            ${displayModels.map(model => `
               <div onclick="showMyModelsDetail(${model.id})" style="cursor:pointer; padding:6px 8px; background:var(--bg-dim); border-radius:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px">${model.display_name || model.name}</span>
-                ${model.is_custom ? '<span style="font-size:10px; background:var(--accent-dim); padding:2px 6px; border-radius:4px">CUSTOM</span>' : ''}
+                <div style="display:flex; align-items:center; gap:4px">
+                  ${model.exists_on_disk ? '<span style="color:var(--green)" title="Installé">✅</span>' : '<span style="color:var(--text-dim)" title="Non installé">⚪</span>'}
+                  ${model.is_custom ? '<span style="font-size:10px; background:var(--accent-dim); padding:2px 6px; border-radius:4px">CUSTOM</span>' : ''}
+                </div>
               </div>
             `).join('')}
-            ${models.length > 5 ? `<div style="font-size:11px; color:var(--text-muted); margin-top:4px">+${models.length - 5} autres</div>` : ''}
+            ${models.length > 5 ? `<div onclick="toggleProviderExpand('${provider.name}')" style="font-size:11px; color:var(--accent); margin-top:4px; cursor:pointer">${isExpanded ? '▲ Masquer' : '+' + (models.length - 5) + ' autres'}</div>` : ''}
           </div>
         </div>
       `;
@@ -3068,18 +3648,23 @@ Jours  : all</pre>
           </div>
           <div style="display:flex; flex-direction:column; gap:6px">
             ${routing.length === 0 ? '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle</div>' : ''}
-            ${routing.map((item, idx) => `
+            ${routing.map((item, idx) => {
+              // Look up model to check if installed
+              const fullModel = myModelsData.models.find(m => m.name === item.model && m.provider_name === item.provider);
+              const isInstalled = fullModel ? fullModel.exists_on_disk : false;
+              return `
               <div onclick="showMyModelsDetailByName('${item.model}', '${item.provider}')" style="cursor:pointer; padding:6px 8px; background:var(--bg-dim); border-radius:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center">
                 <div style="display:flex; align-items:center; gap:8px">
                   <span style="color:var(--text-muted); min-width:16px">${idx + 1}.</span>
-                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px">${item.model}</span>
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px">${item.model}</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:6px">
+                  ${isInstalled ? '<span style="color:var(--green)" title="Installé">✅</span>' : '<span style="color:var(--text-dim)" title="Non installé">⚪</span>'}
                   ${item.is_suspended ? '<span style="font-size:10px; background:var(--red-dim); padding:2px 6px; border-radius:4px">OFF</span>' : ''}
                   ${item.is_default ? '<span style="font-size:10px; background:var(--accent-dim); padding:2px 6px; border-radius:4px">DEFAULT</span>' : ''}
                 </div>
               </div>
-            `).join('')}
+            `}).join('')}
           </div>
         </div>
       `;
@@ -3225,6 +3810,15 @@ Jours  : all</pre>
       loadMyModels();
     }
   };
+  </script>
+
+  <!-- ── FLUX VISUEL ── -->
+  <script>
+  function openFluxVisuel() {
+    const name = document.getElementById('projectDetailName')?.textContent?.trim();
+    if (!name) { alert('Aucun projet sélectionné'); return; }
+    window.open('/static/flux-visuel.html?project=' + encodeURIComponent(name), '_blank');
+  }
   </script>
 
 </body>

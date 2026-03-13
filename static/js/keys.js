@@ -181,6 +181,50 @@ function formatProjectQuota(limit, used) {
   return `${used} / ${limit}`;
 }
 
+// Cache for profiles to avoid repeated API calls
+let cachedProfiles = null;
+
+async function loadProfileCheckboxes(containerId, selectedProfiles) {
+  // Load profiles from API if not cached
+  if (!cachedProfiles) {
+    try {
+      const data = await api('/api/profiles/custom');
+      cachedProfiles = {
+        builtin: data.builtin_profiles || ['coding', 'reasoning', 'chat', 'long', 'vision', 'audio', 'translate'],
+        custom: data.custom_profiles || []
+      };
+    } catch (e) {
+      console.error('Failed to load profiles:', e);
+      cachedProfiles = { builtin: ['coding', 'reasoning', 'chat', 'long', 'vision', 'audio', 'translate'], custom: [] };
+    }
+  }
+
+  // Merge builtin and custom profiles
+  const allProfiles = [...cachedProfiles.builtin, ...cachedProfiles.custom.map(p => p.name)];
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Get selected profiles as array
+  const selected = selectedProfiles ? selectedProfiles.split(',').map(p => p.trim()).filter(p => p) : [];
+
+  // Generate checkboxes
+  container.innerHTML = allProfiles.map(profile => {
+    const isChecked = selected.length === 0 || selected.includes(profile);
+    return `
+      <label style="font-size:11px; color:var(--text); display:flex; align-items:center; gap:2px">
+        <input type="checkbox" class="profile-checkbox" value="${profile}" ${isChecked ? 'checked' : ''} /> ${profile}
+      </label>
+    `;
+  }).join('');
+}
+
+function getSelectedProfiles(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return '';
+  const checkboxes = container.querySelectorAll('.profile-checkbox:checked');
+  return Array.from(checkboxes).map(cb => cb.value).join(',');
+}
+
 async function loadProjects() {
   try {
     const data = await api('/api/projects');
@@ -191,34 +235,42 @@ async function loadProjects() {
         ? `<span class="badge ${pct >= 90 ? 'red' : pct >= 70 ? 'amber' : 'green'}">${pct}%</span>`
         : '<span class="badge blue">illimité</span>';
       return `
-          <div class="card" style="padding:14px 16px">
+          <div class="card" style="padding:14px 16px; cursor:pointer" onclick="showProjectDetail(${p.id})" title="Cliquez pour voir les details">
             <div style="display:flex; align-items:center; gap:10px">
               <div style="font-size:14px; font-weight:700; color:#fff; flex:1">${escapeHtml(p.name)}</div>
               <span class="badge ${p.active ? 'green' : 'red'}">${p.active ? 'actif' : 'révoqué'}</span>
               ${quotaBadge}
             </div>
-            <div style="display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:8px; margin-top:10px; font-size:12px; color:var(--text-dim)">
+            <div style="display:grid; grid-template-columns:repeat(3,minmax(120px,1fr)); gap:8px; margin-top:10px; font-size:12px; color:var(--text-dim)">
               <div><b>Quota:</b> ${formatProjectQuota(p.daily_limit, p.requests_today)}</div>
-              <div><b>Policy:</b> ${escapeHtml(p.policy)}</div>
               <div><b>Mode:</b> ${escapeHtml(p.quota_mode)}</div>
-              <div><b>Token:</b> <span class="mono">${escapeHtml(p.token)}</span></div>
+              <div><b>Token:</b> <span class="mono">${escapeHtml(p.token.substring(0, 12))}...</span></div>
             </div>
-            <div class="flex-row" style="margin-top:10px">
-              <button onclick="copyText('${escapeHtml(p.token)}', this)">📋 Copier token</button>
-              <button onclick="launchClaudeTerminal('${escapeHtml(p.token)}')">🖥 Ouvrir terminal Claude</button>
-              ${p.active ? `<button class="danger" onclick="revokeProject(${p.id})">🔒 Révoquer</button>` : ''}
+            <div class="flex-row" style="margin-top:10px" onclick="event.stopPropagation()">
+              <button onclick="copyText('${escapeHtml(p.token)}', this)">Copier token</button>
+              <button onclick="launchClaudeTerminal('${escapeHtml(p.token)}')">Claude</button>
+              ${p.active ? `<button class="danger" onclick="revokeProject(${p.id})">Revoquer</button>` : ''}
             </div>
           </div>`;
-    }).join('') || '<div style="color:var(--text-muted); font-size:12px">Aucun projet configuré.</div>';
+    }).join('') || '<div style="color:var(--text-muted); font-size:12px">Aucun projet configure.</div>';
     // Update Claude summary card
     try { updateClaudeSummary(rows); } catch { }
-    setProjectsStatus('Projets chargés.');
+    // Load profile checkboxes for new project form
+    try { await loadProfileCheckboxes('newProjectProfileCheckboxes', ''); } catch { }
+    setProjectsStatus('Projets charges.');
   } catch (err) { setProjectsStatus(`Chargement impossible: ${err.message}`, 'error'); }
 }
 
 function updateClaudeSummary(rows) {
   const items = rows || [];
-  const claudes = items.filter(p => String(p.policy || '').toLowerCase() === 'coding_only');
+  // Filter projects that have coding in allowed_profiles
+  // If allowed_profiles is null/empty, it means ALL profiles are allowed
+  const claudes = items.filter(p => {
+    const allowed = (p.allowed_profiles || '').toLowerCase();
+    // If allowed_profiles is empty/null, include all (all profiles allowed)
+    // Otherwise only include if coding is explicitly allowed
+    return !allowed || allowed.includes('coding');
+  });
   const count = claudes.length;
   const totalRequests = claudes.reduce((s, p) => s + (Number(p.requests_today ?? p.used_today ?? 0) || 0), 0);
   const elCount = document.getElementById('claudeSummaryCount');
@@ -230,11 +282,11 @@ function updateClaudeSummary(rows) {
 async function createProjectFromForm() {
   const name = document.getElementById('projectName').value.trim();
   const daily = document.getElementById('projectDailyLimit').value;
-  const policy = document.getElementById('projectPolicy').value;
   const quota_mode = document.getElementById('projectQuotaMode').value;
+  const allowed_profiles = getSelectedProfiles('newProjectProfileCheckboxes');
   if (!name) { setProjectsStatus('Nom du projet requis.', 'error'); return; }
   try {
-    const res = await api('/api/projects', 'POST', { name, daily_limit: daily === '' ? null : Number(daily), policy, quota_mode });
+    const res = await api('/api/projects', 'POST', { name, daily_limit: daily === '' ? null : Number(daily), quota_mode, allowed_profiles: allowed_profiles || null });
     setProjectsStatus(`✅ Projet créé: ${res.project.name}`, 'success');
     document.getElementById('projectName').value = '';
     document.getElementById('projectDailyLimit').value = '';
@@ -270,6 +322,270 @@ async function createClaudeProjectAndLaunch() {
     await loadProjects();
     await launchClaudeTerminal(token);
   } catch (err) { setProjectsStatus(`Onboarding Claude impossible: ${err.message}`, 'error'); }
+}
+
+// ========== PROJECT DETAIL VIEW ==========
+let currentProjectId = null;
+let projectUsageChart = null;
+
+async function showProjectDetail(projectId) {
+  currentProjectId = projectId;
+  document.getElementById('projectsList').style.display = 'none';
+  document.getElementById('projectDetail').style.display = 'block';
+  await loadProjectDetails(projectId);
+  await loadProjectUsage();
+}
+
+function showProjectsList() {
+  currentProjectId = null;
+  document.getElementById('projectDetail').style.display = 'none';
+  document.getElementById('projectsList').style.display = 'flex';
+}
+
+async function loadProjectDetails(projectId) {
+  try {
+    const data = await api(`/api/projects/${projectId}`);
+    const p = data.project;
+
+    document.getElementById('projectDetailName').textContent = p.name;
+
+    const statusEl = document.getElementById('projectDetailStatus');
+    statusEl.textContent = p.active ? 'actif' : 'revoque';
+    statusEl.className = 'badge ' + (p.active ? 'green' : 'red');
+
+    document.getElementById('projectDetailToken').textContent = p.token;
+    document.getElementById('projectDetailQuotaMode').textContent = p.quota_mode;
+    document.getElementById('projectDetailDailyLimit').textContent = p.daily_limit ? p.daily_limit + ' / jour' : 'Illimite';
+    document.getElementById('projectDetailRateLimit').textContent = p.rate_limit ? p.rate_limit + ' req/min' : 'Illimite';
+    document.getElementById('projectDetailMaxCost').textContent = p.max_cost ? p.max_cost + ' $/jour' : 'Illimite';
+    document.getElementById('projectDetailAllowedProfiles').textContent = p.allowed_profiles || 'Tous';
+    document.getElementById('projectDetailForcedProvider').textContent = p.forced_provider || 'Auto';
+    document.getElementById('projectDetailCreated').textContent = new Date(p.created_at).toLocaleString('fr-FR');
+    document.getElementById('projectDetailUpdated').textContent = new Date(p.updated_at).toLocaleString('fr-FR');
+
+    // Show/hide revoke button based on active status
+    document.getElementById('projectRevokeBtn').style.display = p.active ? 'inline-block' : 'none';
+
+  } catch (err) {
+    setProjectsStatus('Erreur chargement projet: ' + err.message, 'error');
+  }
+}
+
+async function loadProjectUsage() {
+  if (!currentProjectId) return;
+
+  const days = document.getElementById('projectUsageRange')?.value || 30;
+
+  try {
+    const data = await api(`/api/projects/${currentProjectId}/usage?days=${days}`);
+    const history = data.history || [];
+    const total = data.total_requests || 0;
+
+    // Update total display
+    document.getElementById('projectUsageTotal').textContent =
+      `Total: ${total.toLocaleString()} requetes sur ${days} jours`;
+
+    // Render chart
+    const ctx = document.getElementById('projectUsageChart');
+    if (!ctx) return;
+
+    if (projectUsageChart) {
+      projectUsageChart.destroy();
+    }
+
+    const labels = history.map(h => h.date).reverse();
+    const values = history.map(h => h.requests).reverse();
+
+    projectUsageChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Requetes',
+          data: values,
+          backgroundColor: 'rgba(99, 102, 241, 0.6)',
+          borderColor: '#6366f1',
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#888', font: { size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.04)' }
+          },
+          y: {
+            ticks: { color: '#888', font: { size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            beginAtZero: true
+          }
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error('Error loading project usage:', err);
+  }
+}
+
+// ========== EDIT PROJECT MODAL ==========
+async function showEditProjectModal() {
+  if (!currentProjectId) return;
+
+  try {
+    const data = await api(`/api/projects/${currentProjectId}`);
+    const p = data.project;
+
+    document.getElementById('editProjectName').value = p.name || '';
+    document.getElementById('editProjectDailyLimit').value = p.daily_limit || '';
+    document.getElementById('editProjectNoLimit').checked = !p.daily_limit;
+    document.getElementById('editProjectQuotaMode').value = p.quota_mode || 'hard_block';
+    document.getElementById('editProjectRateLimit').value = p.rate_limit || '';
+    document.getElementById('editProjectMaxCost').value = p.max_cost || '';
+    document.getElementById('editProjectForcedProvider').value = p.forced_provider || '';
+
+    // Load checkboxes for allowed profiles dynamically
+    await loadProfileCheckboxes('editProjectProfileCheckboxes', p.allowed_profiles || '');
+
+    toggleNoLimit();
+
+    document.getElementById('editProjectModal').style.display = 'flex';
+  } catch (err) {
+    setProjectsStatus('Erreur: ' + err.message, 'error');
+  }
+}
+
+function closeEditProjectModal() {
+  document.getElementById('editProjectModal').style.display = 'none';
+}
+
+function toggleNoLimit() {
+  const noLimit = document.getElementById('editProjectNoLimit')?.checked;
+  const limitInput = document.getElementById('editProjectDailyLimit');
+  if (limitInput) {
+    limitInput.disabled = noLimit;
+    if (noLimit) {
+      limitInput.value = '';
+    }
+  }
+}
+
+async function saveProjectChanges() {
+  if (!currentProjectId) return;
+
+  const name = document.getElementById('editProjectName').value.trim();
+  const noLimit = document.getElementById('editProjectNoLimit')?.checked;
+  const dailyLimitRaw = document.getElementById('editProjectDailyLimit').value;
+  const quotaMode = document.getElementById('editProjectQuotaMode').value;
+  const rateLimitRaw = document.getElementById('editProjectRateLimit').value;
+  const maxCostRaw = document.getElementById('editProjectMaxCost').value;
+  const forcedProvider = document.getElementById('editProjectForcedProvider').value;
+
+  // Get selected profiles from checkboxes (dynamically loaded)
+  const allowedProfiles = getSelectedProfiles('editProjectProfileCheckboxes') || null;
+
+  const payload = { quota_mode: quotaMode };
+
+  if (name) payload.name = name;
+  if (noLimit) {
+    payload.daily_limit = null;
+  } else if (dailyLimitRaw) {
+    payload.daily_limit = parseInt(dailyLimitRaw, 10);
+  }
+
+  // New parameters
+  if (rateLimitRaw) {
+    payload.rate_limit = parseInt(rateLimitRaw, 10);
+  } else {
+    payload.rate_limit = null;
+  }
+
+  if (maxCostRaw) {
+    payload.max_cost = parseFloat(maxCostRaw);
+  } else {
+    payload.max_cost = null;
+  }
+
+  if (allowedProfiles) {
+    payload.allowed_profiles = allowedProfiles;
+  } else {
+    payload.allowed_profiles = null;
+  }
+
+  if (forcedProvider) {
+    payload.forced_provider = forcedProvider;
+  } else {
+    payload.forced_provider = null;
+  }
+
+  try {
+    await api(`/api/projects/${currentProjectId}`, 'PUT', payload);
+    closeEditProjectModal();
+    await loadProjectDetails(currentProjectId);
+    await loadProjects(); // Refresh list
+    setProjectsStatus('Projet mis a jour.', 'success');
+  } catch (err) {
+    setProjectsStatus('Erreur mise a jour: ' + err.message, 'error');
+  }
+}
+
+// ========== PROJECT ACTIONS ==========
+async function deleteProjectFromDetail() {
+  if (!currentProjectId) return;
+
+  const confirmed = confirm('Supprimer ce projet definitivement ?\n\nCette action est irreversible.');
+  if (!confirmed) return;
+
+  try {
+    await api(`/api/projects/${currentProjectId}`, 'DELETE');
+    showProjectsList();
+    await loadProjects();
+    setProjectsStatus('Projet supprime.', 'success');
+  } catch (err) {
+    setProjectsStatus('Erreur suppression: ' + err.message, 'error');
+  }
+}
+
+async function revokeProjectFromDetail() {
+  if (!currentProjectId) return;
+
+  const confirmed = confirm('Revoquer ce token projet ?\n\nLe projet ne sera plus utilisable.');
+  if (!confirmed) return;
+
+  try {
+    await api(`/api/projects/${currentProjectId}/revoke`, 'POST');
+    await loadProjectDetails(currentProjectId);
+    await loadProjects();
+    setProjectsStatus('Token revoque.', 'success');
+  } catch (err) {
+    setProjectsStatus('Erreur revocation: ' + err.message, 'error');
+  }
+}
+
+function copyProjectToken() {
+  const token = document.getElementById('projectDetailToken')?.textContent;
+  if (token) {
+    copyText(token);
+    setProjectsStatus('Token copie.', 'success');
+  }
+}
+
+async function launchClaudeWithProject() {
+  const token = document.getElementById('projectDetailToken')?.textContent;
+  if (token) {
+    await launchClaudeTerminal(token);
+  }
+}
+
+// Update the project list to add click handlers
+function initProjectDetailLinks() {
+  // This function is called after loadProjects to add click handlers
 }
 
 async function importKeys(event) {
@@ -384,4 +700,84 @@ async function testAllKeysCenter() {
   keyTestCenterRunning = false;
   renderKeyTestCenter();
   setKeyTestCenterStatus('✅ Test de toutes les clés terminé.', 'success');
+}
+
+// Add Provider Modal Functions
+function openAddProviderModal() {
+  document.getElementById('addProviderModal').style.display = 'flex';
+  document.getElementById('addProviderName').value = '';
+  document.getElementById('addProviderBaseUrl').value = '';
+  document.getElementById('addProviderApiKey').value = '';
+  document.getElementById('addProviderLabel').value = '';
+  document.getElementById('addProviderStatus').textContent = '';
+  document.getElementById('addProviderName').focus();
+}
+
+function closeAddProviderModal() {
+  document.getElementById('addProviderModal').style.display = 'none';
+}
+
+async function addProvider() {
+  const providerName = document.getElementById('addProviderName').value.trim().toLowerCase();
+  const baseUrl = document.getElementById('addProviderBaseUrl').value.trim();
+  const apiKey = document.getElementById('addProviderApiKey').value.trim();
+  const label = document.getElementById('addProviderLabel').value.trim();
+  const statusEl = document.getElementById('addProviderStatus');
+
+  // Validation
+  if (!providerName) {
+    statusEl.textContent = '❌ Le nom du provider est requis';
+    statusEl.style.color = 'var(--error)';
+    return;
+  }
+  if (!baseUrl) {
+    statusEl.textContent = '❌ La base URL est requise';
+    statusEl.style.color = 'var(--error)';
+    return;
+  }
+  if (!apiKey) {
+    statusEl.textContent = '❌ La clé API est requise';
+    statusEl.style.color = 'var(--error)';
+    return;
+  }
+
+  // Check for valid characters in provider name
+  if (!/^[a-z0-9_]+$/.test(providerName)) {
+    statusEl.textContent = '❌ Le nom doit contenir uniquement des lettres minuscules, chiffres et underscores';
+    statusEl.style.color = 'var(--error)';
+    return;
+  }
+
+  statusEl.textContent = '⏳ Ajout en cours...';
+  statusEl.style.color = 'var(--text-dim)';
+
+  try {
+    const res = await fetch('/api/config/providers/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: providerName,
+        base_url: baseUrl,
+        api_key: apiKey,
+        label: label || providerName
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      statusEl.textContent = data.message || '✅ Provider ajouté avec succès';
+      statusEl.style.color = 'var(--success, green)';
+      setTimeout(() => {
+        closeAddProviderModal();
+        loadKeysCenter(); // Reload keys to show the new provider
+      }, 1000);
+    } else {
+      statusEl.textContent = data.message || '❌ Erreur lors de l\'ajout';
+      statusEl.style.color = 'var(--error)';
+    }
+  } catch (err) {
+    statusEl.textContent = '❌ Erreur réseau: ' + err.message;
+    statusEl.style.color = 'var(--error)';
+  }
 }

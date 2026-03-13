@@ -1,0 +1,335 @@
+import { useState, useMemo } from "react";
+
+const CATEGORIES = [
+  { key: "coding", label: "💻 Coding" },
+  { key: "reasoning", label: "🧠 Reasoning" },
+  { key: "chat", label: "💬 Chat" },
+  { key: "long", label: "📄 Long" },
+  { key: "vision", label: "👁️ Vision" },
+  { key: "audio", label: "🎵 Audio" },
+  { key: "translate", label: "🌍 Translate" },
+];
+
+// Ratings: 0 = N/A, 1-7 = stars (7 = best in class)
+const MODELS = [
+  // --- DeepSeek ---
+  { id: "deepseek-ai/deepseek-v3.2", tag: "🔥 Top", coding:7, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:5 },
+  { id: "deepseek-ai/deepseek-v3.1", tag: "", coding:6, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:4 },
+  { id: "deepseek-ai/deepseek-r1-distill-qwen-32b", tag: "🧠", coding:6, reasoning:7, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "deepseek-ai/deepseek-r1-distill-qwen-14b", tag: "", coding:5, reasoning:6, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "deepseek-ai/deepseek-r1-distill-qwen-7b", tag: "", coding:4, reasoning:5, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "deepseek-ai/deepseek-r1-distill-llama-8b", tag: "", coding:4, reasoning:5, chat:4, long:4, vision:0, audio:0, translate:2 },
+  { id: "deepseek-ai/deepseek-coder-6.7b-instruct", tag: "💻", coding:5, reasoning:3, chat:3, long:3, vision:0, audio:0, translate:2 },
+
+  // --- Qwen ---
+  { id: "qwen/qwen3-coder-480b-a35b-instruct", tag: "🔥 Top", coding:7, reasoning:6, chat:5, long:6, vision:0, audio:0, translate:5 },
+  { id: "qwen/qwen3-235b-a22b", tag: "🔥 Top", coding:7, reasoning:7, chat:6, long:6, vision:0, audio:0, translate:6 },
+  { id: "qwen/qwen3.5-397b-a17b", tag: "🔥 Top", coding:6, reasoning:7, chat:7, long:6, vision:0, audio:0, translate:6 },
+  { id: "qwen/qwq-32b", tag: "🧠", coding:6, reasoning:7, chat:4, long:5, vision:0, audio:0, translate:4 },
+  { id: "qwen/qwen3-next-80b-a3b-thinking", tag: "🧠", coding:5, reasoning:6, chat:4, long:5, vision:0, audio:0, translate:4 },
+  { id: "qwen/qwen3-next-80b-a3b-instruct", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:5 },
+  { id: "qwen/qwen2.5-coder-32b-instruct", tag: "💻", coding:7, reasoning:5, chat:4, long:5, vision:0, audio:0, translate:4 },
+  { id: "qwen/qwen2.5-coder-7b-instruct", tag: "", coding:5, reasoning:4, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "qwen/qwen2.5-7b-instruct", tag: "", coding:4, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:5 },
+  { id: "qwen/qwen2-7b-instruct", tag: "", coding:3, reasoning:4, chat:4, long:4, vision:0, audio:0, translate:4 },
+
+  // --- Meta Llama ---
+  { id: "meta/llama-4-maverick-17b-128e-instruct", tag: "🔥 Top", coding:6, reasoning:6, chat:7, long:7, vision:6, audio:0, translate:6 },
+  { id: "meta/llama-4-scout-17b-16e-instruct", tag: "🔥 Top", coding:5, reasoning:5, chat:6, long:7, vision:5, audio:0, translate:5 },
+  { id: "meta/llama-3.1-405b-instruct", tag: "", coding:6, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:5 },
+  { id: "meta/llama-3.3-70b-instruct", tag: "", coding:5, reasoning:5, chat:6, long:5, vision:0, audio:0, translate:5 },
+  { id: "meta/llama-3.2-90b-vision-instruct", tag: "👁️", coding:4, reasoning:5, chat:5, long:4, vision:6, audio:0, translate:4 },
+  { id: "meta/llama-3.2-11b-vision-instruct", tag: "👁️", coding:3, reasoning:4, chat:5, long:4, vision:5, audio:0, translate:3 },
+  { id: "meta/llama-3.1-70b-instruct", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "meta/llama-3.1-8b-instruct", tag: "", coding:3, reasoning:3, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "meta/llama3-70b-instruct", tag: "", coding:4, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:3 },
+  { id: "meta/codellama-70b", tag: "💻", coding:6, reasoning:3, chat:3, long:4, vision:0, audio:0, translate:1 },
+
+  // --- Mistral ---
+  { id: "mistralai/mistral-large-3-675b-instruct-2512", tag: "🔥 Top", coding:7, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:6 },
+  { id: "mistralai/devstral-2-123b-instruct-2512", tag: "💻", coding:7, reasoning:5, chat:4, long:5, vision:0, audio:0, translate:4 },
+  { id: "mistralai/magistral-small-2506", tag: "🧠", coding:5, reasoning:6, chat:5, long:5, vision:0, audio:0, translate:5 },
+  { id: "mistralai/mistral-large-2-instruct", tag: "", coding:6, reasoning:5, chat:6, long:5, vision:0, audio:0, translate:6 },
+  { id: "mistralai/mistral-medium-3-instruct", tag: "", coding:5, reasoning:5, chat:6, long:5, vision:0, audio:0, translate:5 },
+  { id: "mistralai/mistral-small-3.1-24b-instruct-2503", tag: "", coding:4, reasoning:4, chat:5, long:5, vision:4, audio:0, translate:5 },
+  { id: "mistralai/mistral-nemotron", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "mistralai/codestral-22b-instruct-v0.1", tag: "💻", coding:6, reasoning:4, chat:3, long:4, vision:0, audio:0, translate:3 },
+  { id: "mistralai/mixtral-8x22b-instruct-v0.1", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:5 },
+  { id: "mistralai/mixtral-8x7b-instruct-v0.1", tag: "", coding:4, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:4 },
+  { id: "mistralai/mathstral-7b-v0.1", tag: "🧠", coding:4, reasoning:5, chat:3, long:3, vision:0, audio:0, translate:2 },
+  { id: "mistralai/mistral-7b-instruct-v0.3", tag: "", coding:3, reasoning:3, chat:4, long:3, vision:0, audio:0, translate:3 },
+
+  // --- NVIDIA Nemotron ---
+  { id: "nvidia/llama-3.1-nemotron-ultra-253b-v1", tag: "🔥 Top", coding:6, reasoning:7, chat:6, long:6, vision:0, audio:0, translate:4 },
+  { id: "nvidia/llama-3.3-nemotron-super-49b-v1.5", tag: "", coding:5, reasoning:6, chat:6, long:5, vision:0, audio:0, translate:4 },
+  { id: "nvidia/llama-3.1-nemotron-70b-instruct", tag: "", coding:5, reasoning:6, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "nvidia/nemotron-4-340b-instruct", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "nvidia/llama-3.1-nemotron-nano-8b-v1", tag: "", coding:4, reasoning:5, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "nvidia/nemotron-nano-12b-v2-vl", tag: "👁️", coding:4, reasoning:5, chat:4, long:4, vision:5, audio:0, translate:3 },
+  { id: "nvidia/riva-translate-4b-instruct-v1.1", tag: "🌍", coding:1, reasoning:2, chat:2, long:2, vision:0, audio:4, translate:7 },
+
+  // --- Moonshot Kimi ---
+  { id: "moonshotai/kimi-k2-instruct", tag: "🔥 Top", coding:7, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:5 },
+  { id: "moonshotai/kimi-k2-thinking", tag: "🧠", coding:6, reasoning:7, chat:5, long:6, vision:0, audio:0, translate:4 },
+  { id: "moonshotai/kimi-k2.5", tag: "", coding:6, reasoning:6, chat:6, long:6, vision:0, audio:0, translate:5 },
+
+  // --- Microsoft Phi ---
+  { id: "microsoft/phi-4-multimodal-instruct", tag: "👁️🎵", coding:5, reasoning:5, chat:5, long:4, vision:6, audio:6, translate:4 },
+  { id: "microsoft/phi-4-mini-instruct", tag: "", coding:5, reasoning:5, chat:5, long:4, vision:0, audio:0, translate:4 },
+  { id: "microsoft/phi-4-mini-flash-reasoning", tag: "🧠", coding:4, reasoning:6, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "microsoft/phi-3.5-moe-instruct", tag: "", coding:4, reasoning:4, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "microsoft/phi-3.5-vision-instruct", tag: "👁️", coding:3, reasoning:4, chat:4, long:4, vision:5, audio:0, translate:3 },
+  { id: "microsoft/phi-3-medium-128k-instruct", tag: "", coding:4, reasoning:4, chat:4, long:6, vision:0, audio:0, translate:3 },
+
+  // --- Google Gemma ---
+  { id: "google/gemma-3-27b-it", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:4, audio:0, translate:4 },
+  { id: "google/gemma-3-12b-it", tag: "", coding:4, reasoning:4, chat:5, long:5, vision:4, audio:0, translate:3 },
+  { id: "google/gemma-2-27b-it", tag: "", coding:4, reasoning:5, chat:5, long:4, vision:0, audio:0, translate:4 },
+  { id: "google/gemma-2-9b-it", tag: "", coding:3, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:3 },
+  { id: "google/codegemma-1.1-7b", tag: "💻", coding:5, reasoning:3, chat:3, long:3, vision:0, audio:0, translate:2 },
+  { id: "google/paligemma", tag: "👁️", coding:2, reasoning:3, chat:2, long:2, vision:5, audio:0, translate:3 },
+  { id: "google/gemma-3n-e4b-it", tag: "👁️🎵", coding:3, reasoning:3, chat:4, long:3, vision:4, audio:5, translate:3 },
+
+  // --- MiniMax ---
+  { id: "minimaxai/minimax-m2.1", tag: "🔥 Top", coding:6, reasoning:6, chat:7, long:7, vision:0, audio:0, translate:5 },
+  { id: "minimaxai/minimax-m2", tag: "", coding:5, reasoning:6, chat:6, long:7, vision:0, audio:0, translate:5 },
+
+  // --- IBM Granite ---
+  { id: "ibm/granite-34b-code-instruct", tag: "💻", coding:6, reasoning:3, chat:3, long:4, vision:0, audio:0, translate:2 },
+  { id: "ibm/granite-3.3-8b-instruct", tag: "", coding:4, reasoning:4, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "ibm/granite-3.0-8b-instruct", tag: "", coding:4, reasoning:4, chat:4, long:4, vision:0, audio:0, translate:3 },
+  { id: "ibm/granite-8b-code-instruct", tag: "💻", coding:5, reasoning:3, chat:3, long:3, vision:0, audio:0, translate:2 },
+
+  // --- BigCode ---
+  { id: "bigcode/starcoder2-15b", tag: "💻", coding:5, reasoning:2, chat:2, long:3, vision:0, audio:0, translate:1 },
+  { id: "bigcode/starcoder2-7b", tag: "💻", coding:4, reasoning:2, chat:2, long:3, vision:0, audio:0, translate:1 },
+
+  // --- AI21 Jamba ---
+  { id: "ai21labs/jamba-1.5-large-instruct", tag: "📄", coding:4, reasoning:5, chat:5, long:7, vision:0, audio:0, translate:4 },
+  { id: "ai21labs/jamba-1.5-mini-instruct", tag: "📄", coding:3, reasoning:4, chat:4, long:7, vision:0, audio:0, translate:3 },
+
+  // --- OpenAI GSS ---
+  { id: "openai/gpt-oss-120b", tag: "🔥 Top", coding:7, reasoning:7, chat:7, long:6, vision:0, audio:0, translate:6 },
+  { id: "openai/gpt-oss-20b", tag: "", coding:5, reasoning:5, chat:6, long:5, vision:0, audio:0, translate:5 },
+
+  // --- Writer ---
+  { id: "writer/palmyra-creative-122b", tag: "💬", coding:3, reasoning:4, chat:7, long:5, vision:0, audio:0, translate:3 },
+  { id: "writer/palmyra-fin-70b-32k", tag: "📄", coding:2, reasoning:5, chat:5, long:6, vision:0, audio:0, translate:2 },
+  { id: "writer/palmyra-med-70b-32k", tag: "📄", coding:2, reasoning:5, chat:5, long:6, vision:0, audio:0, translate:2 },
+
+  // --- Databricks ---
+  { id: "databricks/dbrx-instruct", tag: "", coding:5, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:3 },
+
+  // --- Others ---
+  { id: "01-ai/yi-large", tag: "", coding:4, reasoning:4, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "abacusai/dracarys-llama-3.1-70b-instruct", tag: "🧠", coding:5, reasoning:6, chat:5, long:5, vision:0, audio:0, translate:3 },
+  { id: "adept/fuyu-8b", tag: "👁️", coding:1, reasoning:2, chat:3, long:2, vision:5, audio:0, translate:1 },
+  { id: "bytedance/seed-oss-36b-instruct", tag: "", coding:5, reasoning:5, chat:6, long:5, vision:0, audio:0, translate:5 },
+  { id: "stepfun-ai/step-3.5-flash", tag: "", coding:5, reasoning:5, chat:6, long:6, vision:5, audio:0, translate:5 },
+  { id: "stockmark/stockmark-2-100b-instruct", tag: "🌍", coding:3, reasoning:4, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "nvidia/vila", tag: "👁️🎵", coding:2, reasoning:3, chat:4, long:3, vision:6, audio:5, translate:2 },
+  { id: "baichuan-inc/baichuan2-13b-chat", tag: "", coding:3, reasoning:3, chat:4, long:3, vision:0, audio:0, translate:4 },
+  { id: "sarvamai/sarvam-m", tag: "🌍", coding:2, reasoning:3, chat:5, long:4, vision:0, audio:4, translate:6 },
+  { id: "igenius/colosseum_355b_instruct_16k", tag: "", coding:5, reasoning:5, chat:5, long:5, vision:0, audio:0, translate:4 },
+  { id: "mistralai/devstral-2-123b-instruct-2512", tag: "💻", coding:7, reasoning:5, chat:4, long:5, vision:0, audio:0, translate:3 },
+  { id: "mistralai/ministral-14b-instruct-2512", tag: "", coding:4, reasoning:4, chat:5, long:5, vision:0, audio:0, translate:5 },
+  { id: "nv-mistralai/mistral-nemo-12b-instruct", tag: "", coding:4, reasoning:4, chat:5, long:4, vision:0, audio:0, translate:5 },
+];
+
+const deduped = Array.from(new Map(MODELS.map(m => [m.id, m])).values());
+
+const STAR_COLORS = ["", "#dc2626","#ea580c","#ca8a04","#16a34a","#2563eb","#7c3aed","#db2777"];
+
+function Stars({ value }) {
+  if (!value) return <span style={{ color: "#374151", fontSize: 11 }}>—</span>;
+  return (
+    <span style={{ display: "inline-flex", gap: 1, alignItems: "center" }}>
+      {Array.from({ length: 7 }).map((_, i) => (
+        <span key={i} style={{
+          width: 9, height: 9, borderRadius: "50%",
+          background: i < value ? STAR_COLORS[value] : "#1f2937",
+          display: "inline-block", flexShrink: 0,
+          boxShadow: i < value ? `0 0 4px ${STAR_COLORS[value]}60` : "none"
+        }} />
+      ))}
+      <span style={{ color: STAR_COLORS[value], fontSize: 11, fontWeight: 700, marginLeft: 3 }}>{value}</span>
+    </span>
+  );
+}
+
+export default function ModelTable() {
+  const [sort, setSort] = useState({ key: "coding", dir: -1 });
+  const [filter, setFilter] = useState("");
+  const [minCat, setMinCat] = useState(null);
+  const [activeCat, setActiveCat] = useState(null);
+
+  const sorted = useMemo(() => {
+    let data = deduped.filter(m =>
+      m.id.toLowerCase().includes(filter.toLowerCase())
+    );
+    if (minCat) {
+      data = data.filter(m => m[minCat] >= 5);
+    }
+    if (activeCat) {
+      data = data.filter(m => m[activeCat] > 0);
+    }
+    data = [...data].sort((a, b) => {
+      const va = a[sort.key] ?? 0;
+      const vb = b[sort.key] ?? 0;
+      if (vb !== va) return sort.dir * (vb - va);
+      return a.id.localeCompare(b.id);
+    });
+    return data;
+  }, [sort, filter, minCat, activeCat]);
+
+  const handleSort = (key) => {
+    setSort(s => s.key === key ? { key, dir: s.dir * -1 } : { key, dir: -1 });
+  };
+
+  return (
+    <div style={{
+      fontFamily: "'Courier New', monospace",
+      background: "#030712",
+      minHeight: "100vh",
+      color: "#e5e7eb",
+      padding: "20px 12px",
+    }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{
+            fontSize: 22, fontWeight: 900, letterSpacing: 2,
+            color: "#f9fafb", margin: 0,
+            textTransform: "uppercase",
+            borderLeft: "4px solid #7c3aed",
+            paddingLeft: 12,
+          }}>
+            NVIDIA API — Model Intelligence Matrix
+          </h1>
+          <p style={{ color: "#6b7280", fontSize: 12, marginTop: 6, marginLeft: 16 }}>
+            {deduped.length} modèles · Classement par étoiles (7 = meilleur niveau) · Cliquer sur une colonne pour trier
+          </p>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          {[1,2,3,4,5,6,7].map(v => (
+            <span key={v} style={{
+              fontSize: 11, padding: "2px 8px", borderRadius: 4,
+              background: `${STAR_COLORS[v]}20`, color: STAR_COLORS[v],
+              border: `1px solid ${STAR_COLORS[v]}50`, fontWeight: 700
+            }}>
+              {v} {["","minimal","limité","correct","bon","très bon","excellent","best-in-class"][v]}
+            </span>
+          ))}
+          <span style={{ fontSize: 11, color: "#4b5563", padding: "2px 8px" }}>— non supporté</span>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="🔍 Filtrer par nom..."
+            style={{
+              background: "#111827", border: "1px solid #374151",
+              color: "#e5e7eb", padding: "6px 12px", borderRadius: 6,
+              fontSize: 12, outline: "none", width: 200,
+            }}
+          />
+          <span style={{ color: "#6b7280", fontSize: 12 }}>Afficher seulement les modèles ≥5★ en :</span>
+          {CATEGORIES.map(c => (
+            <button key={c.key} onClick={() => setMinCat(minCat === c.key ? null : c.key)}
+              style={{
+                padding: "4px 10px", borderRadius: 5, fontSize: 11, cursor: "pointer",
+                background: minCat === c.key ? "#7c3aed" : "#1f2937",
+                color: minCat === c.key ? "#fff" : "#9ca3af",
+                border: `1px solid ${minCat === c.key ? "#7c3aed" : "#374151"}`,
+                fontFamily: "inherit",
+              }}>
+              {c.label}
+            </button>
+          ))}
+          {(filter || minCat) && (
+            <button onClick={() => { setFilter(""); setMinCat(null); }} style={{
+              padding: "4px 10px", borderRadius: 5, fontSize: 11, cursor: "pointer",
+              background: "#1f2937", color: "#ef4444", border: "1px solid #374151", fontFamily: "inherit"
+            }}>✕ Reset</button>
+          )}
+        </div>
+
+        <div style={{ color: "#6b7280", fontSize: 11, marginBottom: 8 }}>
+          {sorted.length} modèles affichés
+        </div>
+
+        {/* Table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #7c3aed" }}>
+                <th style={{ textAlign: "left", padding: "8px 10px", color: "#9ca3af", fontWeight: 700, whiteSpace: "nowrap", fontSize: 11 }}>
+                  Modèle
+                </th>
+                {CATEGORIES.map(c => (
+                  <th key={c.key}
+                    onClick={() => handleSort(c.key)}
+                    style={{
+                      textAlign: "center", padding: "8px 8px", cursor: "pointer",
+                      color: sort.key === c.key ? "#c4b5fd" : "#9ca3af",
+                      fontWeight: 700, whiteSpace: "nowrap", fontSize: 11,
+                      userSelect: "none",
+                    }}>
+                    {c.label}
+                    {sort.key === c.key && <span style={{ marginLeft: 3 }}>{sort.dir < 0 ? "↓" : "↑"}</span>}
+                  </th>
+                ))}
+                <th style={{ textAlign: "center", padding: "8px 8px", color: "#9ca3af", fontWeight: 700, fontSize: 11 }}>Spécialité</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((m, i) => {
+                const total = CATEGORIES.reduce((s, c) => s + (m[c.key] || 0), 0);
+                const isTop = total >= 30;
+                return (
+                  <tr key={m.id} style={{
+                    borderBottom: "1px solid #111827",
+                    background: i % 2 === 0 ? "#050b14" : "#030712",
+                    transition: "background 0.15s",
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#0f172a"}
+                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#050b14" : "#030712"}
+                  >
+                    <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>
+                      <span style={{
+                        color: isTop ? "#c4b5fd" : "#d1d5db",
+                        fontWeight: isTop ? 700 : 400,
+                        fontSize: 11,
+                      }}>
+                        {m.id}
+                      </span>
+                    </td>
+                    {CATEGORIES.map(c => (
+                      <td key={c.key} style={{
+                        textAlign: "center", padding: "7px 8px",
+                        background: sort.key === c.key ? "#0f0a1f" : "transparent",
+                      }}>
+                        <Stars value={m[c.key]} />
+                      </td>
+                    ))}
+                    <td style={{ textAlign: "center", padding: "7px 8px", fontSize: 13 }}>
+                      {m.tag}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ marginTop: 24, padding: "12px 16px", background: "#0a0a16", borderRadius: 8, border: "1px solid #1f2937", fontSize: 11, color: "#6b7280", lineHeight: 1.7 }}>
+          <strong style={{ color: "#9ca3af" }}>Méthodologie :</strong> Notations basées sur les benchmarks publics (HumanEval, MMLU, GPQA, MT-Bench, MATH, etc.), les papers officiels et les évaluations communautaires. Les modèles spécialisés (traduction, code, vision) peuvent dépasser des modèles généralistes plus grands dans leur domaine. Les modèles d'embedding, reward et safety ont été exclus.
+        </div>
+      </div>
+    </div>
+  );
+}

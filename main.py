@@ -21,6 +21,19 @@ from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from constants import (
+    # Enums
+    Profile,
+    Provider,
+    # Constants
+    Defaults,
+    ProviderEndpoints,
+    ProfileDisplayNames,
+    ErrorMessages,
+    SuccessMessages,
+    # Loaders
+    DatabaseLoaders,
+)
 from db import RotatorDB
 from key_manager import KeyManager
 from notifier import send_notification, send_webhook
@@ -31,7 +44,10 @@ from router import (
     compute_suggestion,
     detect_profile,
     find_model_provider,
+    get_routing_chain,
+    get_all_routing_chains,
     inject_custom_models,
+    invalidate_routing_cache,
     list_all_models,
     model_context,
     profile_emoji,
@@ -50,28 +66,24 @@ else:
     CONFIG_FILE = BASE_DIR / "config.yaml"
 BACKUP_DIR = BASE_DIR / "backups"
 
+# Use constants for provider endpoints
 BASE_URLS = {
-    "ollama_cloud": "https://ollama.com/v1",
-    "nvidia": "https://integrate.api.nvidia.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "google": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "local": "http://localhost:11434/v1",
+    Provider.OLLAMA_CLOUD.value: "https://ollama.com/v1",
+    Provider.NVIDIA.value: ProviderEndpoints.NVIDIA,
+    Provider.OPENROUTER.value: ProviderEndpoints.OPENROUTER,
+    Provider.GOOGLE.value: ProviderEndpoints.GOOGLE,
+    Provider.LOCAL.value: "http://localhost:11434/v1",
+    Provider.OPENAI.value: ProviderEndpoints.OPENAI,
+    Provider.ANTHROPIC.value: ProviderEndpoints.ANTHROPIC,
 }
 
-PROFILE_LABELS = {
-    "coding": "Coding",
-    "reasoning": "Reasoning",
-    "chat": "Chat",
-    "long": "Long",
-    "vision": "Vision",
-    "audio": "Audio",
-    "translate": "Translate",
-}
+# Use constants for profile labels
+PROFILE_LABELS = ProfileDisplayNames.NAMES
 
 DEFAULT_COMPAT_ALIASES = {
-    "claude-sonnet-4-6": "coding",
-    "github/gpt5mini": "coding",
-    "gpt-5-mini": "coding",
+    "claude-sonnet-4-6": Profile.CODING.value,
+    "github/gpt5mini": Profile.CODING.value,
+    "gpt-5-mini": Profile.CODING.value,
 }
 
 install_status: dict[str, dict[str, Any]] = {}
@@ -109,11 +121,15 @@ class AppState:
             "auth_success_resets_total": 0,
         }
         self.total_requests = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=15, read=300, write=30, pool=30),
         )
         self.base_urls: dict[str, str] = BASE_URLS.copy()
-        self.supported_providers: list[str] = ["ollama_cloud", "nvidia", "openrouter", "google"]
+        self.supported_providers: list[str] = [
+            "ollama_cloud", "nvidia", "openrouter", "google", "openai", "anthropic"
+        ]
 
 
 state = AppState()
@@ -141,7 +157,20 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="API Rotator", version="1.0.0", lifespan=lifespan)
 
-logger = logging.getLogger("rotator")
+# ---------------------------------------------------------------------------
+# CORS – allow browser-based apps (Vite dev server, etc.) to call the API
+# ---------------------------------------------------------------------------
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logger = logging.getLogger(Defaults.LOGGER_NAME)
 
 STATIC_DIR = BASE_DIR / "static"
 if STATIC_DIR.is_dir():
@@ -210,7 +239,7 @@ async def admin_auth_middleware(request: Request, call_next):
 
         # Fall back to default token when auth header is not required
         if not token and not require_auth_header():
-            token = "rotator"
+            token = Defaults.DEFAULT_API_KEY
 
         if not token:
             return JSONResponse(
@@ -228,7 +257,7 @@ async def admin_auth_middleware(request: Request, call_next):
                     content={"detail": "Invalid admin token"},
                 )
         # If DB not yet initialized, only accept the default token
-        elif token != "rotator":
+        elif token != Defaults.DEFAULT_API_KEY:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid admin token"},
@@ -254,7 +283,7 @@ def backup_settings(config: dict[str, Any] | None = None) -> dict[str, bool]:
     raw = cfg.get("settings", {}).get("backups", {}) or {}
     return {
         "auto_backup_on_shutdown": bool(raw.get("auto_backup_on_shutdown", True)),
-        "auto_restore_latest_on_startup": bool(raw.get("auto_restore_latest_on_startup", True)),
+        "auto_restore_latest_on_startup": bool(raw.get("auto_restore_latest_on_startup", False)),
     }
 
 
@@ -299,16 +328,19 @@ def log_event(
     provider: str | None = None,
     model: str | None = None,
     source: str = "system",
+    key_id: str | None = None,
 ) -> None:
     if source == "proxy":
         state.total_requests += 1
 
     state.logs.appendleft(
         {
-            "time": datetime.now().strftime("%H:%M:%S"),
+            "time": datetime.now().timestamp(),
             "profile": profile.upper(),
             "provider": provider or "-",
             "model": model or "-",
+            "key_id": key_id or "-",
+            "key_number": (str(key_id).split(":", 1)[1] if key_id and ":" in str(key_id) else "-"),
             "message": message,
             "level": level,
             "source": source,
@@ -448,7 +480,7 @@ def _extract_bearer_token(request: Request) -> str:
         return legacy
     if require_auth_header():
         return ""
-    return "rotator"
+    return Defaults.DEFAULT_API_KEY
 
 
 async def resolve_project_from_request(request: Request) -> dict[str, Any]:
@@ -460,6 +492,17 @@ async def resolve_project_from_request(request: Request) -> dict[str, Any]:
         state.db = RotatorDB(db_path)
         await state.db.initialize()
         await state.db.ensure_default_project_key()
+
+        # Seed database if not already seeded
+        if not await state.db.is_db_seeded():
+            await state.db.seed_all()
+
+        # Set database instance in DatabaseLoaders for router
+        DatabaseLoaders.set_db(state.db)
+
+        # Validate local models (check they still exist on disk)
+        await state.db.validate_local_models()
+
         db = state.db
     token = _extract_bearer_token(request)
     if require_auth_header() and not token:
@@ -476,11 +519,37 @@ async def resolve_project_from_request(request: Request) -> dict[str, Any]:
 
 
 def enforce_project_policy(project: dict[str, Any], profile: str, requested_model: str | None = None) -> None:
+    # If no project, skip
+    if not project:
+        return
+
+    # Check allowed_profiles first (takes precedence over policy)
+    allowed_profiles = project.get("allowed_profiles")
+    if allowed_profiles:
+        # allowed_profiles is a comma-separated list
+        allowed_list = [p.strip().lower() for p in allowed_profiles.split(",") if p.strip()]
+        if profile.lower() not in allowed_list:
+            # Check if this is a custom profile (not in the default built-in profiles list)
+            # Custom profiles like "internat" should be allowed even if not in allowed_list
+            from constants import Profile
+            builtin_profiles = [p.value for p in Profile]
+            if profile.lower() not in builtin_profiles:
+                # It's a custom profile - allow it
+                return
+            raise HTTPException(status_code=403, detail=f"Project key is restricted to profiles: {allowed_profiles}")
+        # If allowed_profiles is set, it takes precedence - no need to check policy
+        return
+
+    # Fall back to policy check
     policy = str(project.get("policy") or "full_access")
     if policy == "full_access":
         return
     if policy == "coding_only" and profile != "coding":
         raise HTTPException(status_code=403, detail="Project key is restricted to coding profile")
+    if policy == "chat_only" and profile != "chat":
+        raise HTTPException(status_code=403, detail="Project key is restricted to chat profile")
+    if policy == "reasoning_only" and profile != "reasoning":
+        raise HTTPException(status_code=403, detail="Project key is restricted to reasoning profile")
     if policy.startswith("models:"):
         allowed_models = [m.strip() for m in policy[7:].split(",") if m.strip()]
         if requested_model and requested_model not in allowed_models:
@@ -510,7 +579,7 @@ def build_headers(provider: str, key_value: str) -> dict[str, str]:
     if provider != "local" and key_value:
         headers["Authorization"] = f"Bearer {key_value}"
     if provider == "openrouter":
-        port = state.config.get("settings", {}).get("port", 47822)
+        port = state.config.get("settings", {}).get("port", Defaults.PORT)
         headers["HTTP-Referer"] = f"http://localhost:{port}"
         headers["X-Title"] = "api-rotator"
     return headers
@@ -655,13 +724,11 @@ def default_presets() -> list[dict[str, Any]]:
         },
         {
             "name": "💰 Economy Mode",
-            "description": "Local then OpenRouter free then Gemma",
+            "description": "OpenRouter free then Gemma",
             "data": {
                 "profiles": {
                     profile: {
                         "models": [
-                            "qwen3-coder-next:latest",
-                            "lfm2.5-thinking:1.2b",
                             "openrouter/free",
                             "gemma-3-27b-it",
                         ],
@@ -690,11 +757,11 @@ def default_presets() -> list[dict[str, Any]]:
         },
         {
             "name": "🏠 100% Local Mode",
-            "description": "Ollama local only",
+            "description": "Ollama local only - uses dynamically resolved local models",
             "data": {
                 "profiles": {
                     profile: {
-                        "models": ["qwen3-coder-next:latest", "lfm2.5-thinking:1.2b"],
+                        "models": [],  # Will use dynamically resolved local models
                         "lock_top": True,
                     }
                     for profile in PROFILES
@@ -804,11 +871,17 @@ async def init_state() -> None:
     if isinstance(custom_models, list) and custom_models:
         inject_custom_models(custom_models)
 
+    # Load custom profiles
+    _apply_custom_profiles()
+
     db_path = state.config.get("settings", {}).get("db_file", "rotator.db")
     db_path = str((BASE_DIR / db_path).resolve()) if not Path(db_path).is_absolute() else db_path
     state.db = RotatorDB(db_path)
     await state.db.initialize()
     await state.db.ensure_default_project_key()
+
+    # Run migrations
+    await state.db.migrate_add_is_custom_column()
 
     pending_restore = await state.db.get_app_state("pending_restore_backup", None)
     if pending_restore:
@@ -820,12 +893,19 @@ async def init_state() -> None:
             await state.db.initialize()
             await state.db.ensure_default_project_key()
             await state.db.set_app_state("pending_restore_backup", None)
-    elif backup_settings(state.config).get("auto_restore_latest_on_startup", True):
-        with suppress(Exception):
-            restored = await state.db.restore_latest_backup(str(BACKUP_DIR))
-            if restored:
-                await state.db.initialize()
-                await state.db.ensure_default_project_key()
+    elif backup_settings(state.config).get("auto_restore_latest_on_startup", False):
+        # Only auto-restore if database is empty (first-time setup)
+        # This prevents overwriting existing data with old backups on restart
+        if not await state.db.is_db_seeded():
+            with suppress(Exception):
+                restored = await state.db.restore_latest_backup(str(BACKUP_DIR))
+                if restored:
+                    await state.db.initialize()
+                    await state.db.ensure_default_project_key()
+
+    # Seed database if not already seeded (always do this on startup)
+    if not await state.db.is_db_seeded():
+        await state.db.seed_all()
 
     quota_map = await state.db.load_daily_quota_map()
     state.key_manager = KeyManager(state.config, quota_map)
@@ -863,7 +943,26 @@ async def init_state() -> None:
         for key_id in blocked_keys:
             state.key_manager.block_key(key_id)
 
+def _get_ollama_local_models() -> list[str]:
+    """Get list of locally installed Ollama models. Returns empty list if Ollama not available."""
+    import httpx
+    try:
+        with httpx.Client(timeout=3.0) as client:
+            resp = client.get("http://localhost:11434/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                models = data.get("models", [])
+                return [m.get("name", "") for m in models if m.get("name")]
+    except Exception:
+        pass
+    return []
+
+# Cache for local models (refreshed each request in choose_targets)
+_local_models_cache: list[str] | None = None
+
 def choose_targets(profile: str) -> list[Any]:
+    global _local_models_cache
+
     chain = ROUTING_CHAINS[profile]
     forced = effective_override(profile)
     if forced == "auto":
@@ -893,6 +992,21 @@ def choose_targets(profile: str) -> list[Any]:
         candidates = [locked_target] + [item for item in candidates if item.model != lock["model"]]
 
     filtered = [item for item in candidates if not provider_blocked(item.provider, item.model)]
+
+    # Dynamically resolve LOCAL provider models from Ollama
+    local_models = _get_ollama_local_models()
+    resolved_targets = []
+    for item in filtered:
+        if item.provider == "local":
+            # For LOCAL provider, use the first available local model
+            if local_models:
+                resolved_targets.append(RouteTarget(item.provider, local_models[0], item.limit))
+            # If no local models available, skip this target
+        else:
+            resolved_targets.append(item)
+
+    filtered = resolved_targets
+
     if state.priority_mode == "local_first":
         return sorted(filtered, key=lambda item: item.provider != "local")
     if state.priority_mode == "cloud_first":
@@ -1057,171 +1171,226 @@ async def _proxy_with_fallback(
     local_attempted = False
     await db.increment_project_daily_usage(project_token)
 
+    # Find last working key index to start from there (skip keys that already failed).
+    # Prefer resuming from the exact last `key_id` when available; if the key no longer
+    # exists or was rotated, fall back to the last `provider` used for this profile.
+    last_key_id = state.last_key_by_profile.get(profile)
+    last_provider = state.active_routes.get(profile, {}).get("provider")
+    start_idx = 0
+
+    matched = False
+    if last_key_id:
+        for i, target in enumerate(candidates):
+            key = km.choose_key_for_target(target)
+            if key and key.key_id == last_key_id:
+                start_idx = i
+                matched = True
+                break
+
+    # If we couldn't match by key_id, try matching by provider for a tolerant resume
+    if not matched and last_provider:
+        for i, target in enumerate(candidates):
+            if target.provider == last_provider:
+                start_idx = i
+                break
+
+    # Reorder candidates: start from last working key, then wrap around
+    if start_idx > 0:
+        candidates = candidates[start_idx:] + candidates[:start_idx]
+
     for idx, target in enumerate(candidates):
         if network_issue_detected and target.provider != "local":
             continue
 
-        key = km.choose_key_for_target(target)
-        if key is None:
+        # Try all eligible keys for this provider/model before moving to next provider
+        keys_to_try = km.choose_keys_for_target(target)
+        if not keys_to_try:
             continue
+
+        # Prefer the last successful key for this profile if it's still below rotation threshold
+        last_key_id = state.last_key_by_profile.get(profile)
+        if last_key_id:
+            threshold = km.rotate_after_errors.get(target.provider, 3)
+            for i, k in enumerate(keys_to_try):
+                if k.key_id == last_key_id and km.consecutive_errors.get(k.key_id, 0) < threshold:
+                    # move this key to the front
+                    keys_to_try.insert(0, keys_to_try.pop(i))
+                    break
 
         if target.provider == "local":
             local_attempted = True
 
-        payload["model"] = target.model
-        headers = build_headers(target.provider, key.value)
-        url = f"{BASE_URLS[target.provider]}/chat/completions"
-        started = time.perf_counter()
+        # Attempt each key in order until one succeeds
+        for key in keys_to_try:
+            payload["model"] = target.model
+            headers = build_headers(target.provider, key.value)
+            url = f"{BASE_URLS[target.provider]}/chat/completions"
+            started = time.perf_counter()
 
-        try:
-            if stream:
-                payload["stream"] = True
-                upstream = state.client.build_request("POST", url, headers=headers, json=payload)
-                response = await state.client.send(upstream, stream=True)
-                if response.status_code >= 400:
-                    err_body = (await response.aread()).decode("utf-8", errors="ignore")
-                    raise RuntimeError(err_body or f"HTTP {response.status_code}")
+            try:
+                if stream:
+                    payload["stream"] = True
+                    upstream = state.client.build_request("POST", url, headers=headers, json=payload)
+                    response = await state.client.send(upstream, stream=True)
+                    if response.status_code >= 400:
+                        err_body = (await response.aread()).decode("utf-8", errors="ignore")
+                        raise RuntimeError(err_body or f"HTTP {response.status_code}")
 
-                state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+                    state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    km.mark_result(target.provider, target.model, key.key_id, True)
+                    await db.increment_daily_quota(target.provider, target.model, key.key_id)
+                    await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
+                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
+                    await update_model_performance(target.model, elapsed_ms, True)
+                    state.last_key_by_profile[profile] = key.key_id
+                    log_event(
+                        profile,
+                        f"{target.provider}/{target.model} → stream started{log_suffix}",
+                        "success",
+                        provider=target.provider,
+                        model=target.model,
+                        source="proxy",
+                        key_id=key.key_id,
+                    )
+
+                    if wrap_stream is not None:
+                        content = wrap_stream(response)
+                    else:
+                        async def _iter() -> Any:
+                            async for chunk in response.aiter_raw():
+                                yield chunk
+                        content = _iter()
+
+                    return StreamingResponse(content, media_type="text/event-stream")
+
+                payload["stream"] = False
+                response = await state.client.post(url, headers=headers, json=payload)
                 elapsed_ms = (time.perf_counter() - started) * 1000
-                km.mark_result(target.provider, target.model, key.key_id, True)
-                await db.increment_daily_quota(target.provider, target.model, key.key_id)
-                await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
-                await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
-                await update_model_performance(target.model, elapsed_ms, True)
-                state.last_key_by_profile[profile] = key.key_id
+
+                if response.status_code < 400:
+                    body = response.json()
+                    # Extract and track tokens
+                    usage = body.get("usage", {})
+                    input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+                    output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+                    if input_tokens or output_tokens:
+                        state.tokens_in = state.tokens_in + input_tokens
+                        state.tokens_out = state.tokens_out + output_tokens
+                    km.mark_result(target.provider, target.model, key.key_id, True)
+                    await db.increment_daily_quota(target.provider, target.model, key.key_id)
+                    await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
+                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
+                    await update_model_performance(target.model, elapsed_ms, True)
+                    state.last_key_by_profile[profile] = key.key_id
+                    state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+
+                    if rotated_from and state.config.get("settings", {}).get("notify_on_rotation", True):
+                        send_notification(
+                            "API Rotator",
+                            f"🔄 Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
+                        )
+                        dispatch_webhook(
+                            "rotation",
+                            f"{profile.upper()} switched from {rotated_from} to {target.provider}",
+                            {"profile": profile, "from": rotated_from, "to": target.provider, "model": target.model},
+                        )
+
+                    if target.model == "gemini-2.5-flash":
+                        used = km.daily_quota_map.get(f"google:gemini-2.5-flash:{key.key_id}", 0)
+                        if used >= 18:
+                            send_notification("API Rotator", f"⚠️ gemini-2.5-flash: {used}/20 requests used today")
+                            dispatch_webhook(
+                                "quota_warning",
+                                f"gemini-2.5-flash: {used}/20 requests used today",
+                                {"provider": "google", "model": target.model, "used": used},
+                            )
+
+                    suffix_str = f", {log_suffix.strip()}" if log_suffix.strip() else ""
+                    log_event(
+                        profile,
+                        f"{target.provider}/{target.model} → success ({int(elapsed_ms)}ms{suffix_str})",
+                        "success",
+                        provider=target.provider,
+                        model=target.model,
+                        source="proxy",
+                        key_id=key.key_id,
+                    )
+
+                    if transform_body is not None:
+                        body = transform_body(body)
+                    return JSONResponse(body)
+
+                # Non-2xx response: mark this key as failed and try next key for this provider
+                error_text = response.text
+                last_error = f"{response.status_code}: {error_text[:240]}"
+                action = km.mark_result(target.provider, target.model, key.key_id, False)
+                await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
+                await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
+                await update_model_performance(target.model, elapsed_ms, False)
                 log_event(
                     profile,
-                    f"{target.provider}/{target.model} → stream started{log_suffix}",
-                    "success",
+                    f"{target.provider}/{target.model} → error {response.status_code}{log_suffix}",
+                    "error",
                     provider=target.provider,
                     model=target.model,
                     source="proxy",
+                    key_id=key.key_id,
                 )
 
-                if wrap_stream is not None:
-                    content = wrap_stream(response)
-                else:
-                    async def _iter() -> Any:
-                        async for chunk in response.aiter_raw():
-                            yield chunk
-                    content = _iter()
-
-                return StreamingResponse(content, media_type="text/event-stream")
-
-            payload["stream"] = False
-            response = await state.client.post(url, headers=headers, json=payload)
-            elapsed_ms = (time.perf_counter() - started) * 1000
-
-            if response.status_code < 400:
-                body = response.json()
-                km.mark_result(target.provider, target.model, key.key_id, True)
-                await db.increment_daily_quota(target.provider, target.model, key.key_id)
-                await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
-                await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
-                await update_model_performance(target.model, elapsed_ms, True)
-                state.last_key_by_profile[profile] = key.key_id
-                state.active_routes[profile] = {"provider": target.provider, "model": target.model}
-
-                if rotated_from and state.config.get("settings", {}).get("notify_on_rotation", True):
-                    send_notification(
-                        "API Rotator",
-                        f"🔄 Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
+                if action.get("rotated"):
+                    rotated_from = target.provider
+                    log_event(
+                        profile,
+                        f"{target.provider} key rotated ({action.get('reason')})",
+                        "rotation",
+                        provider=target.provider,
+                        model=target.model,
+                        source="proxy",
                     )
                     dispatch_webhook(
                         "rotation",
-                        f"{profile.upper()} switched from {rotated_from} to {target.provider}",
-                        {"profile": profile, "from": rotated_from, "to": target.provider, "model": target.model},
+                        f"{target.provider} key rotated",
+                        {"profile": profile, "provider": target.provider, "model": target.model},
                     )
 
-                if target.model == "gemini-2.5-flash":
-                    used = km.daily_quota_map.get(f"google:gemini-2.5-flash:{key.key_id}", 0)
-                    if used >= 18:
-                        send_notification("API Rotator", f"⚠️ gemini-2.5-flash: {used}/20 requests used today")
-                        dispatch_webhook(
-                            "quota_warning",
-                            f"gemini-2.5-flash: {used}/20 requests used today",
-                            {"provider": "google", "model": target.model, "used": used},
-                        )
-
-                suffix_str = f", {log_suffix.strip()}" if log_suffix.strip() else ""
+            except Exception as exc:
+                elapsed_ms = (time.perf_counter() - started) * 1000
+                last_error = str(exc)
+                if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.TimeoutException)):
+                    if target.provider != "local":
+                        network_issue_detected = True
+                action = km.mark_result(target.provider, target.model, key.key_id, False)
+                await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
+                await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
+                await update_model_performance(target.model, elapsed_ms, False)
                 log_event(
                     profile,
-                    f"{target.provider}/{target.model} → success ({int(elapsed_ms)}ms{suffix_str})",
-                    "success",
+                    f"{target.provider}/{target.model} → exception{log_suffix}",
+                    "error",
                     provider=target.provider,
                     model=target.model,
                     source="proxy",
+                    key_id=key.key_id,
                 )
+                if action.get("rotated"):
+                    rotated_from = target.provider
+                    log_event(
+                        profile,
+                        f"{target.provider} key rotated ({action.get('reason')})",
+                        "rotation",
+                        provider=target.provider,
+                        model=target.model,
+                        source="proxy",
+                    )
+                    dispatch_webhook(
+                        "rotation",
+                        f"{target.provider} key rotated",
+                        {"profile": profile, "provider": target.provider, "model": target.model},
+                    )
+                # try next key for same provider
 
-                if transform_body is not None:
-                    body = transform_body(body)
-                return JSONResponse(body)
-
-            error_text = response.text
-            last_error = f"{response.status_code}: {error_text[:240]}"
-            action = km.mark_result(target.provider, target.model, key.key_id, False)
-            await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
-            await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
-            await update_model_performance(target.model, elapsed_ms, False)
-            log_event(
-                profile,
-                f"{target.provider}/{target.model} → error {response.status_code}{log_suffix}",
-                "error",
-                provider=target.provider,
-                model=target.model,
-                source="proxy",
-            )
-
-            if action.get("rotated"):
-                rotated_from = target.provider
-                log_event(
-                    profile,
-                    f"{target.provider} key rotated ({action.get('reason')})",
-                    "rotation",
-                    provider=target.provider,
-                    model=target.model,
-                    source="proxy",
-                )
-                dispatch_webhook(
-                    "rotation",
-                    f"{target.provider} key rotated",
-                    {"profile": profile, "provider": target.provider, "model": target.model},
-                )
-
-        except Exception as exc:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            last_error = str(exc)
-            if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.TimeoutException)):
-                if target.provider != "local":
-                    network_issue_detected = True
-            action = km.mark_result(target.provider, target.model, key.key_id, False)
-            await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
-            await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
-            await update_model_performance(target.model, elapsed_ms, False)
-            log_event(
-                profile,
-                f"{target.provider}/{target.model} → exception{log_suffix}",
-                "error",
-                provider=target.provider,
-                model=target.model,
-                source="proxy",
-            )
-            if action.get("rotated"):
-                rotated_from = target.provider
-                log_event(
-                    profile,
-                    f"{target.provider} key rotated ({action.get('reason')})",
-                    "rotation",
-                    provider=target.provider,
-                    model=target.model,
-                    source="proxy",
-                )
-                dispatch_webhook(
-                    "rotation",
-                    f"{target.provider} key rotated",
-                    {"profile": profile, "provider": target.provider, "model": target.model},
-                )
+        # end for keys_to_try — if none succeeded we'll continue to next candidate provider
 
         if idx == len(candidates) - 1:
             send_notification(
@@ -1880,6 +2049,45 @@ async def reset_all_data(payload: dict[str, Any] | None = None) -> dict[str, Any
     }
 
 
+@app.post("/api/keys/reset-errors")
+async def reset_key_errors(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Clear persisted blocked keys, reset key_stats and today's daily_quotas.
+
+    This endpoint is admin-protected by the existing basic auth middleware.
+    """
+    db = state.db
+    if db is None:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+
+    data = payload or {}
+    create_backup_first = bool(data.get("create_backup", False))
+    if create_backup_first:
+        with suppress(Exception):
+            await db.create_backup_snapshot(str(BACKUP_DIR))
+
+    today = datetime.now(UTC).date().isoformat()
+    async with aiosqlite.connect(db.db_path) as conn:
+        # clear blocked_keys app state
+        await conn.execute(
+            """
+            INSERT INTO app_state (key, value)
+            VALUES (?, ?)
+            ON CONFLICT(key)
+            DO UPDATE SET value = excluded.value
+            """,
+            ("blocked_keys", json.dumps([])),
+        )
+        # reset aggregated key stats
+        await conn.execute(
+            "UPDATE key_stats SET requests = 0, errors = 0, tokens = 0, avg_response_ms = 0"
+        )
+        # delete today's daily_quotas entries
+        await conn.execute("DELETE FROM daily_quotas WHERE date = ?", (today,))
+        await conn.commit()
+
+    return {"ok": True, "message": "Key errors and today's daily quotas reset"}
+
+
 @app.post("/api/maintenance/purge-before")
 async def purge_data_before(payload: dict[str, Any]) -> dict[str, Any]:
     db = state.db
@@ -2053,6 +2261,73 @@ async def test_provider_key(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "status": "network", "message": f"❌ Network error: {str(exc)[:60]}"}
 
 
+@app.post("/api/config/providers/add")
+async def add_dynamic_provider(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Add a new dynamic provider with custom endpoint.
+    This allows adding providers like Mistral, Grok, DeepSeek, etc.
+    """
+    provider_name = str(payload.get("provider", "")).strip().lower()
+    base_url = str(payload.get("base_url", "")).strip()
+    api_key = str(payload.get("api_key", "")).strip()
+    label = str(payload.get("label", f"{provider_name.title()}")).strip()
+
+    if not provider_name:
+        return {"ok": False, "message": "Provider name is required"}
+
+    if not base_url:
+        return {"ok": False, "message": "Base URL is required"}
+
+    if not api_key:
+        return {"ok": False, "message": "API key is required"}
+
+    # Validate base URL format
+    if not base_url.startswith("http://") and not base_url.startswith("https://"):
+        return {"ok": False, "message": "Base URL must start with http:// or https://"}
+
+    # Normalize base URL (ensure it ends with /v1 if missing)
+    if not base_url.endswith("/v1"):
+        base_url = base_url.rstrip("/") + "/v1"
+
+    try:
+        # Add to BASE_URLS
+        BASE_URLS[provider_name] = base_url
+
+        # Add to config
+        config = load_config()
+        if "keys" not in config:
+            config["keys"] = {}
+
+        # Add the key for this provider
+        if provider_name not in config["keys"]:
+            config["keys"][provider_name] = []
+
+        # Check if key already exists
+        key_exists = any(
+            k.get("key", "").strip() == api_key or k.get("token", "").strip() == api_key
+            for k in config["keys"].get(provider_name, [])
+        )
+
+        if not key_exists:
+            config["keys"][provider_name].append({
+                "label": label,
+                "key": api_key
+            })
+
+        save_config_file(config)
+        await reload_config()
+
+        return {
+            "ok": True,
+            "message": f"✅ Provider '{provider_name}' added successfully",
+            "provider": provider_name,
+            "base_url": base_url
+        }
+
+    except Exception as exc:
+        return {"ok": False, "message": f"❌ Error: {str(exc)[:100]}"}
+
+
 @app.get("/api/projects")
 async def list_projects() -> dict[str, Any]:
     db = state.db
@@ -2085,15 +2360,56 @@ async def create_project(payload: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail="daily_limit must be >= 0")
 
     policy = str(payload.get("policy") or "full_access")
-    if policy not in {"full_access", "coding_only"}:
+    if policy not in {"full_access", "coding_only", "chat_only", "read_only", "reasoning_only"}:
         raise HTTPException(status_code=400, detail="Unknown policy")
 
     quota_mode = str(payload.get("quota_mode") or "hard_block")
     if quota_mode not in {"hard_block", "local_only", "alert_only"}:
         raise HTTPException(status_code=400, detail="Unknown quota_mode")
 
+    # New parameters
+    rate_limit_raw = payload.get("rate_limit")
+    rate_limit: int | None = None
+    if rate_limit_raw not in (None, ""):
+        try:
+            rate_limit = int(rate_limit_raw)
+            if rate_limit < 1:
+                raise HTTPException(status_code=400, detail="rate_limit must be >= 1")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="rate_limit must be an integer") from exc
+
+    allowed_profiles = payload.get("allowed_profiles")
+    if allowed_profiles:
+        allowed_profiles = str(allowed_profiles).strip()
+        # Validate profiles (comma-separated list) - include custom profiles
+        builtin_profiles = {"coding", "reasoning", "chat", "long", "vision", "audio", "translate"}
+        custom_profiles = _get_custom_profiles()
+        custom_profile_names = {cp.get("name") for cp in custom_profiles if cp.get("name")}
+        valid_profiles = builtin_profiles.union(custom_profile_names)
+        profiles_list = [p.strip() for p in allowed_profiles.split(",") if p.strip()]
+        for p in profiles_list:
+            if p not in valid_profiles:
+                raise HTTPException(status_code=400, detail=f"Invalid profile: {p}. Valid: {valid_profiles}")
+
+    forced_provider = payload.get("forced_provider")
+    if forced_provider:
+        forced_provider = str(forced_provider).strip()
+        valid_providers = {"ollama_cloud", "local", "nvidia", "openrouter", "google", "openai", "anthropic", "custom"}
+        if forced_provider not in valid_providers:
+            raise HTTPException(status_code=400, detail=f"Invalid provider: {forced_provider}. Valid: {valid_providers}")
+
+    max_cost_raw = payload.get("max_cost")
+    max_cost: float | None = None
+    if max_cost_raw not in (None, ""):
+        try:
+            max_cost = float(max_cost_raw)
+            if max_cost < 0:
+                raise HTTPException(status_code=400, detail="max_cost must be >= 0")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="max_cost must be a number") from exc
+
     try:
-        project = await db.create_project_key(name, daily_limit, policy, quota_mode)
+        project = await db.create_project_key(name, daily_limit, policy, quota_mode, rate_limit, allowed_profiles, forced_provider, max_cost)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Unable to create project key: {exc}") from exc
 
@@ -2107,6 +2423,163 @@ async def revoke_project(project_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="DB unavailable")
     await db.deactivate_project_key(project_id)
     return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: int) -> dict[str, Any]:
+    db = state.db
+    if db is None:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+    project = await db.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project": project}
+
+
+@app.put("/api/projects/{project_id}")
+async def update_project(project_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    db = state.db
+    if db is None:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+
+    # Validate and extract fields
+    name = payload.get("name")
+    if name is not None:
+        name = str(name).strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Project name cannot be empty")
+
+    daily_limit_raw = payload.get("daily_limit")
+    daily_limit: int | None
+    if daily_limit_raw in (None, ""):
+        daily_limit = None
+    elif daily_limit_raw == "none":
+        daily_limit = None
+    else:
+        try:
+            daily_limit = int(daily_limit_raw)
+            if daily_limit < 0:
+                raise HTTPException(status_code=400, detail="daily_limit must be >= 0")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="daily_limit must be an integer") from exc
+
+    policy = payload.get("policy")
+    if policy is not None:
+        policy = str(policy)
+        if policy not in {"full_access", "coding_only", "chat_only", "read_only", "reasoning_only"}:
+            raise HTTPException(status_code=400, detail="Unknown policy")
+
+    quota_mode = payload.get("quota_mode")
+    if quota_mode is not None:
+        quota_mode = str(quota_mode)
+        if quota_mode not in {"hard_block", "local_only", "alert_only"}:
+            raise HTTPException(status_code=400, detail="Unknown quota_mode")
+
+    # New parameters
+    rate_limit_raw = payload.get("rate_limit")
+    rate_limit: int | None = None
+    if rate_limit_raw not in (None, "", "none"):
+        try:
+            rate_limit = int(rate_limit_raw)
+            if rate_limit < 1:
+                raise HTTPException(status_code=400, detail="rate_limit must be >= 1")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="rate_limit must be an integer") from exc
+    elif rate_limit_raw == "none":
+        rate_limit = None
+
+    allowed_profiles = payload.get("allowed_profiles")
+    if allowed_profiles is not None:
+        if allowed_profiles == "none" or allowed_profiles == "":
+            allowed_profiles = None
+        else:
+            allowed_profiles = str(allowed_profiles).strip()
+            builtin_profiles = {"coding", "reasoning", "chat", "long", "vision", "audio", "translate"}
+            custom_profiles = _get_custom_profiles()
+            custom_profile_names = {cp.get("name") for cp in custom_profiles if cp.get("name")}
+            valid_profiles = builtin_profiles.union(custom_profile_names)
+            profiles_list = [p.strip() for p in allowed_profiles.split(",") if p.strip()]
+            for p in profiles_list:
+                if p not in valid_profiles:
+                    raise HTTPException(status_code=400, detail=f"Invalid profile: {p}. Valid: {valid_profiles}")
+
+    forced_provider = payload.get("forced_provider")
+    if forced_provider is not None:
+        if forced_provider == "none" or forced_provider == "":
+            forced_provider = None
+        else:
+            forced_provider = str(forced_provider).strip()
+            valid_providers = {"ollama_cloud", "local", "nvidia", "openrouter", "google", "openai", "anthropic", "custom"}
+            if forced_provider not in valid_providers:
+                raise HTTPException(status_code=400, detail=f"Invalid provider: {forced_provider}. Valid: {valid_providers}")
+
+    max_cost_raw = payload.get("max_cost")
+    max_cost: float | None = None
+    if max_cost_raw not in (None, "", "none"):
+        try:
+            max_cost = float(max_cost_raw)
+            if max_cost < 0:
+                raise HTTPException(status_code=400, detail="max_cost must be >= 0")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="max_cost must be a number") from exc
+    elif max_cost_raw == "none":
+        max_cost = None
+
+    project = await db.update_project_key(
+        project_id,
+        name=name,
+        daily_limit=daily_limit,
+        policy=policy,
+        quota_mode=quota_mode,
+        rate_limit=rate_limit,
+        allowed_profiles=allowed_profiles,
+        forced_provider=forced_provider,
+        max_cost=max_cost,
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return {"ok": True, "project": project}
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: int) -> dict[str, Any]:
+    db = state.db
+    if db is None:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+    success = await db.delete_project_key(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/usage")
+async def get_project_usage(project_id: int, days: int = 30) -> dict[str, Any]:
+    db = state.db
+    if db is None:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+
+    try:
+        # Validate project exists
+        project = await db.get_project(project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Get usage history
+        history = await db.get_project_usage_history(project_id, days)
+
+        # Calculate totals
+        total_requests = sum(h["requests"] for h in history)
+
+        return {
+            "project": project,
+            "history": history,
+            "total_requests": total_requests,
+            "days": days,
+        }
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}\n{traceback.format_exc()}")
 
 
 @app.post("/api/projects/claude-onboarding")
@@ -2915,6 +3388,231 @@ CATALOGUE_CACHE_FILES = {
 CATALOGUE_REFRESH_INTERVAL = 3600  # seconds between automatic refreshes
 
 
+# Ollama scraping progress tracker
+ollama_scrape_progress = {
+    "status": "idle",  # idle, running, completed, error
+    "total_models": 0,
+    "scraped_count": 0,
+    "current_model": "",
+    "error": None,
+    "started_at": None,
+    "finished_at": None,
+}
+
+
+async def scrape_ollama_full() -> dict[str, Any]:
+    """
+    Complete Ollama scraping based on ollama_extract.py logic.
+    Gets all models from ollama.com/library, scrapes each page for details.
+    Tracks progress in ollama_scrape_progress.
+    """
+    global ollama_scrape_progress
+    import re
+    from bs4 import BeautifulSoup
+
+    HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+    # Reset progress
+    ollama_scrape_progress = {
+        "status": "running",
+        "total_models": 0,
+        "scraped_count": 0,
+        "current_model": "Fetching model list...",
+        "error": None,
+        "started_at": datetime.now(UTC).isoformat(),
+        "finished_at": None,
+    }
+
+    try:
+        # 1. Get all models from ollama.com/library
+        response = await state.client.get("https://ollama.com/library", headers=HEADERS, timeout=30)
+        html = response.text
+
+        # Extract model names from the page
+        matches = re.findall(r'/library/([a-zA-Z0-9\-\.:]+)', html)
+        model_names = sorted(set(matches))
+
+        ollama_scrape_progress["total_models"] = len(model_names)
+        ollama_scrape_progress["current_model"] = f"Found {len(model_names)} models"
+
+        if not model_names:
+            ollama_scrape_progress["status"] = "error"
+            ollama_scrape_progress["error"] = "No models found"
+            return {"ok": False, "error": "No models found", "count": 0}
+
+        # 2. Scrape each model
+        all_data = []
+
+        for i, model_name in enumerate(model_names):
+            ollama_scrape_progress["scraped_count"] = i
+            ollama_scrape_progress["current_model"] = f"{model_name} ({i+1}/{len(model_names)})"
+
+            try:
+                url = f"https://ollama.com/library/{model_name}"
+                page_response = await state.client.get(url, headers=HEADERS, timeout=20)
+                soup = BeautifulSoup(page_response.text, "html.parser")
+
+                data = {
+                    "model_name": model_name,
+                    "description": "",
+                    "categories": [],
+                    "pulls": "",
+                    "updated": "",
+                    "variants": {},
+                    "params_summary": "",
+                    "vision_support": "non",
+                    "agentic_rl": "non",
+                    "top_benchmark": "",
+                    "url": url,
+                }
+
+                # Extract title (model name)
+                if soup.title:
+                    data["model_name"] = soup.title.text.strip()
+
+                # Extract description from meta tag
+                meta = soup.find("meta", attrs={"name": "description"})
+                if meta:
+                    data["description"] = meta.get("content", "")
+
+                # Extract categories
+                cats = soup.find_all("span")
+                for c in cats:
+                    txt = c.text.strip().lower()
+                    if txt in ["vision", "tools", "chat", "coding", "reasoning"]:
+                        data["categories"].append(txt)
+
+                # Extract pulls (downloads)
+                pulls = soup.find(attrs={"x-test-pull-count": True})
+                if pulls:
+                    data["pulls"] = pulls.text.strip()
+
+                # Extract updated date
+                upd = soup.find(attrs={"x-test-updated": True})
+                if upd:
+                    data["updated"] = upd.text.strip()
+
+                # Extract variants with sizes - directly from table
+                # Look for table with model variants (Name, Size, Context columns)
+                variants_data = {}  # variant -> size
+
+                # Find tables on the page
+                tables = soup.find_all("table")
+                for table in tables:
+                    rows = table.find_all("tr")
+                    for row in rows:
+                        cells = row.find_all(["td", "th"])
+                        if len(cells) >= 2:
+                            # Check if first cell contains variant name (with colon)
+                            first_cell = cells[0].get_text(strip=True)
+                            if ":" in first_cell:
+                                variant = first_cell.split(":")[-1]
+                                # Second cell should be size
+                                size = ""
+                                if len(cells) > 1:
+                                    size_text = cells[1].get_text(strip=True)
+                                    # Check if it looks like a size (contains GB, MB, etc.)
+                                    if re.match(r'[\d.]+\s*(GB|MB|K)', size_text, re.IGNORECASE):
+                                        size = size_text
+                                variants_data[variant] = size
+
+                # Also try the old method as fallback
+                if not variants_data:
+                    rows = soup.find_all("a", href=re.compile(r'/library/.+:.+'))
+                    for r in rows:
+                        href = r.get("href")
+                        if ":" in href:
+                            variant = href.split(":")[-1]
+                            parent = r.find_parent()
+                            size = ""
+                            if parent:
+                                txt = parent.text
+                                m = re.search(r'(\d+\.?\d*\s*(GB|MB|B))', txt)
+                                if m:
+                                    size = m.group(1)
+                            variants_data[variant] = size
+
+                data["variants"] = variants_data
+
+                # Extract from readme
+                readme = soup.find(id="readme")
+                text = readme.text if readme else soup.text
+
+                # Params summary
+                m = re.search(r'(\d+(\.\d+)?B)', text)
+                if m:
+                    data["params_summary"] = m.group(1)
+
+                # Vision support
+                if "vision" in text.lower() or "multimodal" in text.lower():
+                    data["vision_support"] = "oui"
+
+                # Agentic RL
+                if "agentic" in text.lower() or "function calling" in text.lower():
+                    data["agentic_rl"] = "oui"
+
+                # Top benchmark
+                m = re.search(r'(SWE-bench|GPQA|AIME).*?(\d+\.\d+)%', text)
+                if m:
+                    data["top_benchmark"] = f"{m.group(1)} {m.group(2)}%"
+
+                all_data.append(data)
+
+                # Small delay to be respectful to the server
+                await asyncio.sleep(0.3)
+
+            except Exception as e:
+                print(f"Error scraping {model_name}: {e}")
+                continue
+
+        # 3. Save to cache
+        ollama_scrape_progress["scraped_count"] = len(model_names)
+        ollama_scrape_progress["current_model"] = "Saving cache..."
+
+        # Convert to the clean format - ONE entry per model with variants array
+        cache_models = []
+        for data in all_data:
+            # Build variants array
+            variants = []
+            for variant, size in data["variants"].items():
+                is_cloud = variant.endswith("-cloud") or variant == "cloud"
+                variants.append({
+                    "variant": variant,
+                    "size": size if size else "",
+                    "is_cloud": is_cloud
+                })
+
+            # Single entry per model with all info
+            model_entry = {
+                "name": data["model_name"],
+                "description": data["description"],
+                "tags": data["categories"],
+                "downloads": data["pulls"],
+                "modified_at": data["updated"],
+                "params_summary": data["params_summary"],
+                "vision_support": data["vision_support"],
+                "agentic_rl": data["agentic_rl"],
+                "top_benchmark": data["top_benchmark"],
+                "variants": variants,
+            }
+            cache_models.append(model_entry)
+
+        _write_catalogue_cache("ollama", {"models": cache_models})
+
+        # Update progress to completed
+        ollama_scrape_progress["status"] = "completed"
+        ollama_scrape_progress["finished_at"] = datetime.now(UTC).isoformat()
+        ollama_scrape_progress["current_model"] = f"Completed! {len(all_data)} models"
+
+        return {"ok": True, "count": len(all_data)}
+
+    except Exception as e:
+        ollama_scrape_progress["status"] = "error"
+        ollama_scrape_progress["error"] = str(e)
+        ollama_scrape_progress["finished_at"] = datetime.now(UTC).isoformat()
+        return {"ok": False, "error": str(e), "count": 0}
+
+
 def _read_catalogue_cache(provider: str) -> dict[str, Any]:
     path = CATALOGUE_CACHE_FILES.get(provider)
     if path and path.exists():
@@ -2930,18 +3628,6 @@ def _write_catalogue_cache(provider: str, data: dict[str, Any]) -> None:
     if path:
         data["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-async def _refresh_ollama_cache() -> int:
-    """Fetch Ollama library from ollama.com and update cache. Returns model count."""
-    try:
-        response = await state.client.get("https://ollama.com/api/tags", timeout=15)
-        raw = response.json()
-        models = raw.get("models", [])
-        _write_catalogue_cache("ollama", {"models": models})
-        return len(models)
-    except Exception:
-        return -1
 
 
 async def _refresh_openrouter_cache() -> int:
@@ -2999,7 +3685,9 @@ async def _refresh_nvidia_cache() -> int:
 async def refresh_all_catalogues() -> dict[str, int]:
     """Refresh all provider caches. Returns {provider: model_count} (-1 = error)."""
     results: dict[str, int] = {}
-    results["ollama"] = await _refresh_ollama_cache()
+    # Use the new full scraping function for Ollama
+    scrape_result = await scrape_ollama_full()
+    results["ollama"] = scrape_result.get("count", -1) if scrape_result.get("ok") else -1
     results["openrouter"] = await _refresh_openrouter_cache()
     results["nvidia"] = await _refresh_nvidia_cache()
     return results
@@ -3022,49 +3710,140 @@ async def catalogue_refresh() -> dict[str, Any]:
     return {"ok": True, "results": results}
 
 
+@app.post("/api/catalogue/ollama/scrape")
+async def catalogue_ollama_scrape() -> dict[str, Any]:
+    """Manually trigger scraping of Ollama model details with progress tracking."""
+    global ollama_scrape_progress
+
+    # If already running, return current progress
+    if ollama_scrape_progress["status"] == "running":
+        return {
+            "ok": True,
+            "status": "running",
+            "message": "Scraping already in progress",
+            "progress": ollama_scrape_progress
+        }
+
+    # Start scraping in background
+    asyncio.create_task(scrape_ollama_full())
+
+    return {
+        "ok": True,
+        "status": "started",
+        "message": "Scraping started in background"
+    }
+
+
+@app.get("/api/catalogue/ollama/progress")
+async def catalogue_ollama_progress() -> dict[str, Any]:
+    """Get current Ollama scraping progress."""
+    return ollama_scrape_progress
+
+
 @app.get("/api/catalogue/ollama")
 async def catalogue_ollama() -> dict[str, Any]:
-    installed = set()
-    try:
-        response = await state.client.get("http://localhost:11434/api/tags", timeout=5)
-        payload = response.json()
-        for item in payload.get("models", []):
-            installed.add(str(item.get("name", "")).split(":")[0])
-    except Exception:
-        pass
-
+    # Read cache - return immediately if exists (fast, no scraping)
     cache = _read_catalogue_cache("ollama")
     cached_models = cache.get("models", [])
-    if not cached_models:
-        count = await _refresh_ollama_cache()
-        if count > 0:
-            cache = _read_catalogue_cache("ollama")
-            cached_models = cache.get("models", [])
 
-    models: list[dict[str, Any]] = []
+    # If cache exists with models, return immediately
+    if cached_models:
+        try:
+            models = _process_ollama_models(cached_models)
+            return {
+                "models": models,
+                "last_refresh": cache.get("updated_at")
+            }
+        except Exception as e:
+            logger.warning(f"Error processing Ollama models: {e}")
+            return {
+                "models": [],
+                "error": str(e),
+                "cache_models_count": len(cached_models)
+            }
+
+    # Cache empty - check if scraping is running
+    if ollama_scrape_progress["status"] == "running":
+        return {
+            "models": [],
+            "status": "scraping",
+            "message": "First launch: scraping in progress",
+            "progress": ollama_scrape_progress
+        }
+
+    # No cache, no scraping running - trigger scraping
+    asyncio.create_task(scrape_ollama_full())
+
+    return {
+        "models": [],
+        "status": "scraping",
+        "message": "First launch: scraping started",
+        "progress": ollama_scrape_progress
+    }
+
+
+def _process_ollama_models(cached_models: list) -> list[dict[str, Any]]:
+    """Process cached Ollama models for display - handles new clean format."""
+    final_models = []
+
     for item in cached_models:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name", item.get("model", "")))
-        details = item.get("details") or {}
-        models.append({
+
+        name = item.get("name", "")
+        variants = item.get("variants", [])
+
+        # Determine has_cloud and has_local from variants
+        has_cloud = any(v.get("is_cloud", False) for v in variants)
+        has_local = any(
+            not v.get("is_cloud", False) and v.get("size")
+            for v in variants
+        )
+
+        # Set availability
+        if has_cloud and has_local:
+            availability = "cloud+local"
+        elif has_cloud:
+            availability = "cloud"
+        elif has_local:
+            availability = "local"
+        else:
+            availability = "unknown"
+
+        # Process variants - add full name
+        processed_variants = []
+        for v in variants:
+            v_name = f"{name}:{v.get('variant', '')}" if v.get('variant') != 'latest' else name
+            processed_variants.append({
+                "variant": v.get("variant", ""),
+                "name": v_name,
+                "size": v.get("size", ""),
+                "installed": False,  # Online only
+                "is_cloud": v.get("is_cloud", False),
+            })
+
+        # Sort variants: cloud first, then by size
+        processed_variants.sort(key=lambda v: (not v.get("is_cloud", False), v.get("size", "")))
+
+        final_models.append({
             "name": name,
             "description": item.get("description", ""),
             "tags": item.get("tags", []) or [],
-            "size": item.get("size"),
-            "parameter_size": item.get("parameter_size", "") or details.get("parameter_size", ""),
-            "context_length": item.get("context_length"),
-            "installed": name.split(":")[0] in installed,
-            "downloads": item.get("downloads", 0),
-            "details": {
-                "family": details.get("family", ""),
-                "parameter_size": details.get("parameter_size", ""),
-                "quantization_level": details.get("quantization_level", ""),
-                "format": details.get("format", ""),
-            },
-            "digest": item.get("digest", ""),
+            "params_summary": item.get("params_summary", ""),
+            "vision_support": item.get("vision_support", ""),
+            "agentic_rl": item.get("agentic_rl", ""),
+            "top_benchmark": item.get("top_benchmark", ""),
+            "downloads": item.get("downloads", ""),
+            "modified_at": item.get("modified_at", ""),
+            "variants": processed_variants,
+            "has_cloud": has_cloud,
+            "has_local": has_local,
+            "availability": availability,
         })
-    return {"models": models, "updated_at": cache.get("updated_at")}
+
+    # Sort by name
+    final_models.sort(key=lambda m: m.get("name", ""))
+    return final_models
 
 
 @app.get("/api/catalogue/openrouter")
@@ -3120,6 +3899,17 @@ async def catalogue_local() -> dict[str, Any]:
         return {"models": models}
     except Exception:
         return {"models": [], "error": "Ollama not running"}
+
+
+@app.get("/api/catalogue/ollama/installed")
+async def catalogue_ollama_installed() -> dict[str, Any]:
+    """Get list of locally installed Ollama model names."""
+    try:
+        response = await state.client.get("http://localhost:11434/api/tags", timeout=5)
+        installed = [item.get("name", "") for item in response.json().get("models", [])]
+        return {"installed": installed}
+    except Exception:
+        return {"installed": [], "error": "Ollama not running"}
 
 
 @app.post("/api/catalogue/install")
@@ -3204,14 +3994,19 @@ async def catalogue_add_to_rotator(payload: dict[str, Any]) -> dict[str, Any]:
     if not model:
         raise HTTPException(status_code=400, detail="model required")
 
+    # Normalize source to lowercase for matching
+    source_lower = source.lower() if source else "local"
+    
     provider_map = {
         "ollama": "ollama_cloud" if ":cloud" in model else "local",
+        "cloud": "ollama_cloud" if ":cloud" in model else "local",
         "local": "local",
         "openrouter": "openrouter",
         "nvidia": "nvidia",
     }
-    provider = provider_map.get(source, "local")
+    provider = provider_map.get(source_lower, "local")
 
+    # Also save to config (backward compatibility)
     config = load_config()
     catalogue = config.setdefault("catalogue", {})
     models_by_provider = catalogue.setdefault("models_by_provider", {})
@@ -3220,7 +4015,541 @@ async def catalogue_add_to_rotator(payload: dict[str, Any]) -> dict[str, Any]:
         provider_models.append(model)
     save_config_file(config)
 
+    # ALSO add to database so it appears in profile creation form
+    try:
+        if state.db:
+            # Get provider ID from database
+            provider_row = await state.db._fetchone(state.db.db, "SELECT id FROM providers WHERE name = ?", (provider,))
+            if provider_row:
+                provider_id = provider_row[0]
+
+                # Check if model already exists in DB
+                existing = await state.db._fetchone(state.db.db, "SELECT id FROM models WHERE name = ? AND provider_id = ?", (model, provider_id))
+                if not existing:
+                    # Insert model into database
+                    await state.db.db.execute(
+                        "INSERT INTO models (provider_id, name, display_name, context_window, supports_vision, supports_audio, is_custom, exists_on_disk, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (provider_id, model, model, 0, False, False, True, True, str(datetime.now().isoformat()))
+                    )
+                    await state.db.db.commit()
+                    log_event("SYSTEM", f"Model added to DB from catalogue: {model} ({provider})", "rotation", source="catalogue")
+    except Exception as e:
+        # Log but don't fail - config save was successful
+        log_event("WARNING", f"Failed to add model to DB: {e}", "rotation", source="catalogue")
+
     return {"message": f"{model} added to provider {provider}"}
+
+
+# ---------------------------------------------------------------------------
+# Custom profiles management
+# ---------------------------------------------------------------------------
+import re as _profile_re
+
+_VALID_PROFILE_NAME = _profile_re.compile(r"^[a-z][a-z0-9_-]{1,29}$")
+
+
+def _get_custom_profiles() -> list[dict[str, Any]]:
+    """Return custom profiles from database (with config fallback)."""
+    # Try to get from database first
+    if state.db is not None:
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If in async context, we need to use ensure_future
+                # For sync context, we'll fall back to config
+                pass
+            else:
+                # Can run sync
+                custom_profiles = asyncio.run(state.db.get_custom_profiles())
+                if custom_profiles:
+                    return custom_profiles
+        except Exception:
+            pass
+
+    # Fall back to config
+    config = state.config or load_config()
+    return config.get("custom_profiles", [])
+
+
+def _save_custom_profiles(profiles: list[dict[str, Any]]) -> None:
+    """Persist custom profiles to config file."""
+    config = load_config()
+    config["custom_profiles"] = profiles
+    save_config_file(config)
+    state.config = config
+
+
+def _apply_custom_profiles() -> None:
+    """Inject custom profiles into the routing system."""
+    from router import PROFILES, ROUTING_CHAINS, RouteTarget
+    profiles = _get_custom_profiles()
+    for cp in profiles:
+        name = cp.get("name", "")
+        if name and name not in PROFILES:
+            PROFILES.append(name)
+        models = cp.get("models", [])
+        if name and models:
+            targets = []
+            for m in models:
+                model_id = m.get("model", "")
+                provider = m.get("provider", "local")
+                if model_id:
+                    targets.append(RouteTarget(provider, model_id, "custom"))
+            if targets:
+                ROUTING_CHAINS[name] = targets
+
+
+@app.get("/api/profiles/custom")
+async def get_custom_profiles() -> dict[str, Any]:
+    from router import PROFILES
+    builtin = Profile.all()
+    return {
+        "builtin_profiles": builtin,
+        "custom_profiles": _get_custom_profiles(),
+    }
+
+
+@app.get("/api/profiles/builtin/{profile_name}")
+async def get_builtin_profile_models(profile_name: str) -> dict[str, Any]:
+    from router import ROUTING_CHAINS
+
+    name = profile_name.strip().lower()
+    chain = ROUTING_CHAINS.get(name)
+    if chain is None:
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+
+    return {"profile": name, "models": [t.model for t in chain]}
+
+
+# =============================================================================
+# NEW DATABASE API ENDPOINTS - Providers, Profiles, Models, Folders
+# =============================================================================
+
+async def ensure_db_initialized() -> None:
+    """Ensure the database is initialized."""
+    if state.db is None:
+        config = state.config or load_config()
+        db_path = config.get("settings", {}).get("db_file", "rotator.db")
+        db_path = str((BASE_DIR / db_path).resolve()) if not Path(db_path).is_absolute() else db_path
+        state.db = RotatorDB(db_path)
+        await state.db.initialize()
+        await state.db.ensure_default_project_key()
+
+        # Seed database if not already seeded
+        if not await state.db.is_db_seeded():
+            await state.db.seed_all()
+
+        # Set database instance in DatabaseLoaders for router
+        DatabaseLoaders.set_db(state.db)
+
+        # Validate local models
+        await state.db.validate_local_models()
+
+
+@app.get("/api/db/providers")
+async def list_db_providers(active_only: bool = True) -> dict[str, Any]:
+    """List all providers from database."""
+    await ensure_db_initialized()
+    providers = await state.db.list_providers(active_only=active_only)
+    return {"providers": providers, "count": len(providers)}
+
+
+@app.get("/api/db/profiles")
+async def list_db_profiles(active_only: bool = True) -> dict[str, Any]:
+    """List all profiles from database."""
+    await ensure_db_initialized()
+    profiles = await state.db.list_profiles(active_only=active_only)
+    return {"profiles": profiles, "count": len(profiles)}
+
+
+@app.get("/api/db/models")
+async def list_db_models(provider_id: int | None = None) -> dict[str, Any]:
+    """List all models from database."""
+    await ensure_db_initialized()
+    models = await state.db.list_models(provider_id=provider_id)
+    return {"models": models, "count": len(models)}
+
+
+@app.get("/api/db/routing/{profile}")
+async def get_db_routing(profile: str) -> dict[str, Any]:
+    """Get routing chain for a profile from database."""
+    await ensure_db_initialized()
+    chain = await state.db.get_profile_routing_chain(profile)
+    return {"profile": profile, "routing": chain}
+
+
+@app.get("/api/db/folders")
+async def list_db_folders(active_only: bool = True) -> dict[str, Any]:
+    """List all model folders from database."""
+    await ensure_db_initialized()
+    folders = await state.db.list_model_folders(active_only=active_only)
+    return {"folders": folders, "count": len(folders)}
+
+
+@app.post("/api/db/folders")
+async def create_db_folder(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new model folder."""
+    await ensure_db_initialized()
+
+    path = payload.get("path", "").strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="Folder path is required")
+
+    scan_on_start = payload.get("scan_on_start", True)
+
+    folder = await state.db.create_model_folder(path, scan_on_start=scan_on_start)
+    return {"folder": folder}
+
+
+@app.delete("/api/db/folders/{folder_id}")
+async def delete_db_folder(folder_id: int) -> dict[str, Any]:
+    """Delete a model folder."""
+    await ensure_db_initialized()
+
+    success = await state.db.delete_model_folder(folder_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    return {"success": True, "message": "Folder deleted"}
+
+
+@app.post("/api/db/folders/{folder_id}/scan")
+async def scan_db_folder(folder_id: int) -> dict[str, Any]:
+    """Scan a model folder for local models."""
+    await ensure_db_initialized()
+
+    result = await state.db.scan_model_folder(folder_id)
+    return result
+
+
+@app.post("/api/db/validate-local")
+async def validate_db_local_models() -> dict[str, Any]:
+    """Validate that local models still exist on disk."""
+    await ensure_db_initialized()
+
+    result = await state.db.validate_local_models()
+    return result
+
+
+@app.post("/api/db/seed")
+async def seed_db() -> dict[str, Any]:
+    """Seed the database with default data."""
+    await ensure_db_initialized()
+
+    result = await state.db.seed_all()
+    # Invalidate routing cache after seeding
+    invalidate_routing_cache()
+
+    return {"success": True, "seeded": result}
+
+
+@app.get("/api/db/status")
+async def get_db_status() -> dict[str, Any]:
+    """Get database seeding status."""
+    await ensure_db_initialized()
+
+    is_seeded = await state.db.is_db_seeded()
+    providers = await state.db.list_providers(active_only=False)
+    profiles = await state.db.list_profiles(active_only=False)
+    models = await state.db.list_models()
+    folders = await state.db.list_model_folders(active_only=False)
+
+    return {
+        "is_seeded": is_seeded,
+        "providers": len(providers),
+        "profiles": len(profiles),
+        "models": len(models),
+        "folders": len(folders),
+    }
+
+
+@app.post("/api/db/models")
+async def create_db_model(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create a new model."""
+    await ensure_db_initialized()
+
+    provider_id = payload.get("provider_id")
+    name = payload.get("name", "").strip()
+    if not provider_id or not name:
+        raise HTTPException(status_code=400, detail="provider_id and name are required")
+
+    display_name = payload.get("display_name", name)
+    context_window = payload.get("context_window")
+    supports_vision = payload.get("supports_vision", False)
+    supports_audio = payload.get("supports_audio", False)
+
+    model = await state.db.create_model(
+        provider_id=provider_id,
+        name=name,
+        display_name=display_name,
+        is_custom=True,
+        context_window=context_window,
+        supports_vision=supports_vision,
+        supports_audio=supports_audio,
+    )
+
+    # Add to all profiles if specified
+    profiles = payload.get("profiles", [])
+    for profile_name in profiles:
+        profile = await state.db.get_profile_by_name(profile_name)
+        if profile:
+            await state.db.add_model_to_profile(model["id"], profile["id"])
+
+    # Invalidate routing cache
+    invalidate_routing_cache()
+
+    return {"model": model}
+
+
+@app.delete("/api/db/models/{model_id}")
+async def delete_db_model(model_id: int) -> dict[str, Any]:
+    """Delete a model. Only custom models can be deleted."""
+    await ensure_db_initialized()
+
+    success = await state.db.delete_model(model_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot delete model (only custom models can be deleted)")
+
+    # Invalidate routing cache
+    invalidate_routing_cache()
+
+    return {"success": True, "message": "Model deleted"}
+
+
+@app.post("/api/db/models/{model_id}/suspend")
+async def suspend_db_model(model_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Suspend or unsuspend a model in a specific profile."""
+    await ensure_db_initialized()
+
+    profile_id = payload.get("profile_id")
+    suspended = payload.get("suspended", True)
+
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="profile_id is required")
+
+    await state.db.suspend_model_in_profile(model_id, profile_id, suspended=suspended)
+
+    # Invalidate routing cache
+    invalidate_routing_cache()
+
+    return {"success": True, "suspended": suspended}
+
+
+@app.post("/api/db/models/{model_id}/add-to-profile")
+async def add_model_to_profile_db(model_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Add a model to a profile's routing chain."""
+    await ensure_db_initialized()
+
+    profile_id = payload.get("profile_id")
+    order_index = payload.get("order_index")
+
+    if not profile_id:
+        raise HTTPException(status_code=400, detail="profile_id is required")
+
+    result = await state.db.add_model_to_profile(model_id, profile_id, order_index)
+
+    # Invalidate routing cache
+    invalidate_routing_cache()
+
+    return {"success": True, "result": result}
+
+
+@app.post("/api/db/profiles/{profile_id}/reorder")
+async def reorder_db_profile_models(profile_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    """Reorder models in a profile. Only non-default models can be reordered."""
+    await ensure_db_initialized()
+
+    model_ids = payload.get("model_ids", [])
+    if not model_ids:
+        raise HTTPException(status_code=400, detail="model_ids are required")
+
+    success = await state.db.reorder_models_in_profile(profile_id, model_ids)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot reorder (cannot reorder default models)")
+
+    # Invalidate routing cache
+    invalidate_routing_cache()
+
+    return {"success": True, "message": "Models reordered"}
+
+
+@app.post("/api/profiles/custom")
+async def create_custom_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    from router import PROFILES
+
+    # Ensure database is initialized
+    await ensure_db_initialized()
+
+    name = str(payload.get("name", "")).strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Profile name is required")
+    if not _VALID_PROFILE_NAME.match(name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid name: 2-30 chars, lowercase alphanumeric, dashes and underscores only, must start with a letter",
+        )
+
+    # Check collision with built-in profiles
+    builtin = Profile.all()
+    if name in builtin:
+        raise HTTPException(status_code=409, detail=f"Profile '{name}' conflicts with a built-in profile")
+
+    # Check collision with existing custom profiles in database
+    existing = await state.db.get_custom_profiles()
+    if any(cp.get("name") == name for cp in existing):
+        raise HTTPException(status_code=409, detail=f"A custom profile named '{name}' already exists")
+
+    models = payload.get("models", [])
+    if not isinstance(models, list):
+        models = []
+
+    description = str(payload.get("description", "")).strip()[:200]
+
+    # Save to database with full routing chain
+    new_profile = await state.db.create_custom_profile(name, description, models)
+
+    # Also save to config for backward compatibility
+    config_custom_profiles = _get_custom_profiles()
+    config_custom_profiles.append({
+        "name": name,
+        "description": description,
+        "models": models,
+    })
+    _save_custom_profiles(config_custom_profiles)
+
+    # Apply custom profiles to routing
+    _apply_custom_profiles()
+
+    log_event("SYSTEM", f"Custom profile created: {name}", "rotation", source="profile")
+    return {"ok": True, "profile": new_profile}
+
+
+@app.delete("/api/profiles/custom/{profile_name}")
+async def delete_custom_profile(profile_name: str) -> dict[str, Any]:
+    from router import PROFILES, ROUTING_CHAINS
+
+    # Ensure database is initialized
+    await ensure_db_initialized()
+
+    name = profile_name.strip().lower()
+
+    # Delete from database
+    deleted = await state.db.delete_custom_profile(name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Custom profile '{name}' not found")
+
+    # Also remove from config for backward compatibility
+    existing = _get_custom_profiles()
+    new_list = [cp for cp in existing if cp.get("name") != name]
+    if len(new_list) != len(existing):
+        _save_custom_profiles(new_list)
+
+    # Remove from runtime
+    if name in PROFILES:
+        PROFILES.remove(name)
+    ROUTING_CHAINS.pop(name, None)
+
+    log_event("SYSTEM", f"Custom profile deleted: {name}", "rotation", source="profile")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# "Mon Catalogue" (My Models) management
+# ---------------------------------------------------------------------------
+
+def _get_my_models() -> list[dict[str, Any]]:
+    """Return my personalized model list from config."""
+    config = state.config or load_config()
+    return config.get("my_models", [])
+
+
+def _save_my_models(models: list[dict[str, Any]]) -> None:
+    """Persist my personalized model list to config file."""
+    config = load_config()
+    config["my_models"] = models
+    save_config_file(config)
+    state.config = config
+
+
+@app.get("/api/catalogue/my-models")
+async def get_my_models() -> dict[str, Any]:
+    return {"models": _get_my_models()}
+
+
+@app.post("/api/catalogue/my-models/add")
+async def add_to_my_models(payload: dict[str, Any]) -> dict[str, Any]:
+    model_data = payload.get("model")
+    if not model_data or not isinstance(model_data, dict):
+        raise HTTPException(status_code=400, detail="Valid model data required")
+
+    name = model_data.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="Model name required")
+
+    # Determine provider based on model name
+    provider = model_data.get("provider")
+    if not provider:
+        # Infer provider from model name
+        if ":cloud" in name or name.endswith(":latest"):
+            provider = "ollama_cloud"
+        elif "/" in name:
+            # Check common prefixes for nvidia (but NOT qwen/ which is OpenRouter!)
+            nvidia_prefixes = ["nvidia/", "meta/", "mistralai/", "moonshotai/", "deepseek-ai/", "adept/", "bigcode/", "bytedance/", "databricks/", "ai21labs/", "arcee-ai/", "liquid/", "abacusai/", "aisingapore/", "baai/", "baichuan-inc/"]
+            # Note: qwen/ is OpenRouter, not NVIDIA!
+            provider = "nvidia" if any(name.startswith(p) for p in nvidia_prefixes) else "openrouter"
+        else:
+            provider = "ollama_cloud"
+
+    # Add provider to model data
+    model_data["provider"] = provider
+
+    # Add directly to main database instead of personal catalogue
+    try:
+        db = state.db
+        if db:
+            # Get provider ID
+            provider_row = await db._fetchone(db.db, "SELECT id FROM providers WHERE name = ?", (provider,))
+            if not provider_row:
+                raise HTTPException(status_code=400, detail=f"Provider not found: {provider}")
+
+            provider_id = provider_row[0]
+
+            # Check if model already exists
+            existing = await db._fetchone(db.db, "SELECT id FROM models WHERE name = ? AND provider_id = ?", (name, provider_id))
+            if existing:
+                return {"ok": True, "message": "Already in catalogue"}
+
+            # Insert model
+            await db.db.execute(
+                "INSERT INTO models (provider_id, name, display_name, context_window, supports_vision, supports_audio, is_custom, exists_on_disk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (provider_id, name, name, 0, False, False, True, True)
+            )
+            await db.db.commit()
+
+            log_event("SYSTEM", f"Model added to database: {name} ({provider})", "rotation", source="catalogue")
+            return {"ok": True}
+        else:
+            raise HTTPException(status_code=500, detail="Database not available")
+    except Exception as e:
+        log_event("ERROR", f"Failed to add model: {e}", "rotation", source="catalogue")
+        raise HTTPException(status_code=500, detail=f"Failed to add model: {str(e)}")
+
+
+@app.post("/api/catalogue/my-models/remove")
+async def remove_from_my_models(payload: dict[str, Any]) -> dict[str, Any]:
+    name = payload.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="Model name required")
+
+    existing = _get_my_models()
+    new_list = [m for m in existing if m.get("name") != name]
+    if len(new_list) == len(existing):
+        raise HTTPException(status_code=404, detail=f"Model '{name}' not found in your catalogue")
+
+    _save_my_models(new_list)
+    log_event("SYSTEM", f"Model removed from personal catalogue: {name}", "rotation", source="catalogue")
+    return {"ok": True}
 
 
 @app.get("/api/logs")
@@ -3302,6 +4631,22 @@ async def get_status() -> dict[str, Any]:
 @app.get("/api/security/status")
 async def get_security_status() -> dict[str, Any]:
     return {"security": security_status_payload()}
+
+
+@app.get("/api/routing/chains")
+async def get_routing_chains() -> dict[str, Any]:
+    """Get routing chains for all profiles."""
+    from router import get_routing_chain
+
+    chains = {}
+    for profile in PROFILES:
+        try:
+            chain = await get_routing_chain(profile)
+            chains[profile] = [{"provider": c.provider, "model": c.model} for c in chain]
+        except Exception:
+            chains[profile] = []
+    return chains
+
 
 
 @app.post("/api/override/force")
@@ -3848,7 +5193,7 @@ async def run_single_test(name: str) -> dict[str, Any]:
     started = time.perf_counter()
     try:
         if name == "connectivity":
-            port = state.config.get("settings", {}).get("port", 47822)
+            port = state.config.get("settings", {}).get("port", Defaults.PORT)
             url = f"http://localhost:{port}/v1/models"
             res = await state.client.get(url, headers={"Authorization": "Bearer rotator"})
             if res.status_code >= 400:
@@ -3932,7 +5277,7 @@ async def run_single_test(name: str) -> dict[str, Any]:
         if name == "profile_detection":
             payload.pop("model", None)
 
-        port = state.config.get("settings", {}).get("port", 47822)
+        port = state.config.get("settings", {}).get("port", Defaults.PORT)
         url = f"http://localhost:{port}/v1/chat/completions"
         res = await state.client.post(url, json=payload)
         if res.status_code >= 400:
@@ -4198,6 +5543,283 @@ async def dashboard() -> str:
     return dashboard_html()
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FLUX VISUEL ENDPOINTS - Real-time state and events for flux-visuel.html
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/flux/state")
+async def get_flux_state(project: str = "default") -> dict[str, Any]:
+    """
+    Get current state for flux-visuel.html visualization.
+    Returns active routes, key stats, metrics, and full profile/model/provider structure.
+    Filters profiles based on project's allowed_profiles.
+    """
+    db = state.db
+    if db is None:
+        return {"error": "DB unavailable"}
+
+    # Get project info first to check allowed_profiles
+    project_data = await db.get_project_by_token(project)
+    allowed_profiles = None
+    if project_data and project_data.get("allowed_profiles"):
+        # Parse comma-separated allowed profiles
+        allowed_profiles = [p.strip() for p in project_data["allowed_profiles"].split(",") if p.strip()]
+
+    # Get profiles from database (includes custom profiles)
+    db_profiles = await db.list_profiles(active_only=True)
+
+    # Filter profiles based on allowed_profiles if specified
+    if allowed_profiles:
+        db_profiles = [p for p in db_profiles if p["name"] in allowed_profiles]
+
+    # Map profiles to frontend format
+    profile_emoji = {
+        "coding": "💻", "reasoning": "🧠", "chat": "💬",
+        "long": "📄", "vision": "👁️", "audio": "🎤", "translate": "🌐"
+    }
+    profiles = []
+    for p in db_profiles:
+        profiles.append({
+            "id": p["name"],
+            "name": p["name"],
+            "emoji": profile_emoji.get(p["name"], "📌"),
+            "desc": p.get("description", p.get("display_name") or ""),
+            "custom": p.get("is_custom", False)
+        })
+
+    # Get project info for response
+    project_info = {
+        "name": project_data["name"] if project_data else project,
+        "token": project_data["token"] if project_data else f"rtr_proj_{hash(project) % 10000000:07d}"
+    }
+
+    # Get routing chains for each profile (models)
+    profile_models: dict[str, list] = {}
+    all_providers: dict[str, dict] = {}
+    for p in db_profiles:
+        profile_name = p["name"]
+        routing_chain = await db.get_profile_routing_chain(profile_name)
+        models = []
+        for i, m in enumerate(routing_chain):
+            # Generate a short name from model name
+            model_name = m["model"]
+            short_name = model_name.split("/")[-1] if "/" in model_name else model_name
+            if ":" in short_name:
+                short_name = short_name.split(":")[0]
+
+            models.append({
+                "id": f"{profile_name}_m{i+1}",
+                "name": model_name,
+                "short": short_name,
+                "provider": m["provider"],
+                "order": m.get("order", i + 1)
+            })
+
+            # Track provider
+            prov = m["provider"]
+            if prov not in all_providers:
+                all_providers[prov] = {
+                    "label": prov.replace("_", " ").title(),
+                    "emoji": "🟢" if prov in ["nvidia", "ollama_cloud"] else "🔵",
+                    "status": "ok"
+                }
+
+        profile_models[profile_name] = models
+
+    # If no profiles from DB, use fallback
+    if not profiles:
+        profiles = [
+            {"id": "coding", "name": "coding", "emoji": "💻", "desc": "Code & développement", "custom": False},
+            {"id": "chat", "name": "chat", "emoji": "💬", "desc": "Chat général", "custom": False},
+        ]
+        profile_models = {
+            "coding": [{"id": "cm1", "name": "llama-3.3-70b", "short": "llama-3.3-70b", "provider": "openrouter", "order": 1}],
+            "chat": [{"id": "ch1", "name": "gemma-3-27b", "short": "gemma-3-27b", "provider": "google", "order": 1}],
+        }
+
+    # Get active routes from AppState
+    active_routes = state.active_routes.copy()
+
+    # Get the first available profile (or default to first)
+    profile = project if project in active_routes else (profiles[0]["id"] if profiles else "coding")
+    active_route = active_routes.get(profile, None)
+
+    # If no active route, use the first model from the routing chain as default
+    if not active_route or active_route.get("model") == "-":
+        if profile in profile_models and profile_models[profile]:
+            first_model = profile_models[profile][0]
+            active_route = {
+                "provider": first_model["provider"],
+                "model": first_model["name"]
+            }
+
+    # Get the current key for this profile
+    key_id = state.last_key_by_profile.get(profile, "")
+
+    # Get key statistics from database
+    key_stats = await db.get_all_key_stats()
+
+    # Use real-time metrics from state (not from key_stats)
+    total_requests = state.total_requests
+    tokens_in = state.tokens_in
+    tokens_out = state.tokens_out
+
+    # Calculate average response time from key stats
+    avg_ms = 0
+    if key_stats:
+        avg_times = [ks.get("avg_ms", 0) for ks in key_stats.values() if ks.get("avg_ms", 0) > 0]
+        if avg_times:
+            avg_ms = int(sum(avg_times) / len(avg_times))
+
+    # Build the response structure matching flux-visuel.html expectations
+    return {
+        "project": project_info,
+        "profiles": profiles,
+        "profileModels": profile_models,
+        "providers": all_providers,
+        "active": {
+            "profile": profile,
+            "model": active_route.get("model", "-"),
+            "provider": active_route.get("provider", "-"),
+            "key_id": key_id
+        },
+        "metrics": {
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "avg_ms": avg_ms,
+            "total_reqs": total_requests
+        },
+        "keys": key_stats,
+        "routes": active_routes
+    }
+
+
+@app.get("/api/flux/events")
+async def flux_events(request: Request, project: str = "default") -> StreamingResponse:
+    """
+    SSE endpoint for real-time flux events.
+    Streams updates when routes, keys, or metrics change.
+    """
+    async def event_generator():
+        last_state = {}
+
+        while True:
+            # Check if client disconnected
+            if await request.is_disconnected():
+                break
+
+            try:
+                db = state.db
+                if db:
+                    # Get project info first to check allowed_profiles
+                    project_data = await db.get_project_by_token(project)
+                    allowed_profiles = None
+                    if project_data and project_data.get("allowed_profiles"):
+                        allowed_profiles = [p.strip() for p in project_data["allowed_profiles"].split(",") if p.strip()]
+
+                    # Get profiles from database
+                    db_profiles = await db.list_profiles(active_only=True)
+
+                    # Filter profiles based on allowed_profiles if specified
+                    if allowed_profiles:
+                        db_profiles = [p for p in db_profiles if p["name"] in allowed_profiles]
+
+                    # Map profiles to frontend format
+                    profile_emoji = {
+                        "coding": "", "reasoning": "🧠", "chat": "💬",
+                        "long": "📄", "vision": "👁️", "audio": "🎤", "translate": "🌐"
+                    }
+                    profiles = []
+                    for p in db_profiles:
+                        profiles.append({
+                            "id": p["name"],
+                            "name": p["name"],
+                            "emoji": profile_emoji.get(p["name"], "📌"),
+                            "desc": p.get("description", p.get("display_name") or ""),
+                            "custom": p.get("is_custom", False)
+                        })
+
+                    # Get routing chains for each profile
+                    profile_models: dict[str, list] = {}
+                    all_providers: dict[str, dict] = {}
+                    for p in db_profiles:
+                        profile_name = p["name"]
+                        routing_chain = await db.get_profile_routing_chain(profile_name)
+                        models = []
+                        for i, m in enumerate(routing_chain):
+                            model_name = m["model"]
+                            short_name = model_name.split("/")[-1] if "/" in model_name else model_name
+                            if ":" in short_name:
+                                short_name = short_name.split(":")[0]
+
+                            models.append({
+                                "id": f"{profile_name}_m{i+1}",
+                                "name": model_name,
+                                "short": short_name,
+                                "provider": m["provider"],
+                                "order": m.get("order", i + 1)
+                            })
+
+                            prov = m["provider"]
+                            if prov not in all_providers:
+                                all_providers[prov] = {
+                                    "label": prov.replace("_", " ").title(),
+                                    "emoji": "🟢" if prov in ["nvidia", "ollama_cloud"] else "🔵",
+                                    "status": "ok"
+                                }
+
+                        profile_models[profile_name] = models
+
+                    # Get project info (use DB data if available)
+                    project_info = {
+                        "name": project_data["name"] if project_data else project,
+                        "token": project_data["token"] if project_data else f"rtr_proj_{hash(project) % 10000000:07d}"
+                    }
+
+                    # Get current state
+                    active_routes = state.active_routes.copy()
+                    profile = project if project in active_routes else (profiles[0]["id"] if profiles else "coding")
+                    active_route = active_routes.get(profile, None)
+
+                    # If no active route, use the first model from the routing chain as default
+                    if not active_route or active_route.get("model") == "-":
+                        if profile in profile_models and profile_models[profile]:
+                            first_model = profile_models[profile][0]
+                            active_route = {
+                                "provider": first_model["provider"],
+                                "model": first_model["name"]
+                            }
+
+                    current_state = {
+                        "project": project_info,
+                        "profiles": profiles,
+                        "profileModels": profile_models,
+                        "providers": all_providers,
+                        "active": {
+                            "profile": profile,
+                            "model": active_route.get("model", "-") if active_route else "-",
+                            "provider": active_route.get("provider", "-") if active_route else "-",
+                            "key_id": state.last_key_by_profile.get(profile, "")
+                        },
+                        "keys": await db.get_all_key_stats(),
+                        "timestamp": datetime.now(UTC).isoformat()
+                    }
+
+                    # Only send if state changed
+                    if current_state != last_state:
+                        last_state = current_state
+                        yield f"data: {json.dumps(current_state)}\n\n"
+
+                await asyncio.sleep(2)  # Check every 2 seconds
+
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                await asyncio.sleep(5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -4205,3 +5827,5 @@ if __name__ == "__main__":
     port = config.get("settings", {}).get("port", 47822)
     host = config.get("settings", {}).get("host", "127.0.0.1")
     uvicorn.run("main:app", host=host, port=port, reload=False)
+
+# ═══════════════════════════════════════════════════════════════════════════════

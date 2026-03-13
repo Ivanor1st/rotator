@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenRouter — 29 Modèles Gratuits · Classement 2025</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080810;--surface:#0f0f1a;--card:#13131f;--border:#1a1a2e;
+  --accent:#c8f545;--accent2:#5f4eff;--text:#e2e2f0;--muted:#4a4a6a;
+  --gold:#ffd166;--red:#ff5e6c;--cyan:#00f5d4;--green:#4ade80;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(95,78,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(95,78,255,.035) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+.glow{position:fixed;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(95,78,255,.08),transparent 70%);top:-200px;left:-100px;pointer-events:none;z-index:0}
+.glow2{position:fixed;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(200,245,69,.05),transparent 70%);bottom:-150px;right:-100px;pointer-events:none;z-index:0}
+.wrapper{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:48px 20px 80px}
+
+header{margin-bottom:48px}
+.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(200,245,69,.1);border:1px solid rgba(200,245,69,.25);color:var(--accent);font-size:10px;font-weight:700;letter-spacing:.15em;padding:5px 12px;border-radius:4px;text-transform:uppercase;margin-bottom:24px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.4s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+h1{font-family:'Unbounded',sans-serif;font-size:clamp(1.8rem,4.5vw,3.2rem);font-weight:900;line-height:1.06;letter-spacing:-.03em;margin-bottom:12px}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{font-size:11px;color:var(--muted);line-height:1.9;max-width:700px}
+.sub b{color:var(--cyan)}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:32px}
+.li{display:flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--border);padding:5px 11px;border-radius:6px;font-size:10px;color:var(--muted);letter-spacing:.04em;cursor:default;transition:all .2s}
+.li:hover{border-color:var(--accent2);color:var(--text)}
+
+.tbl-wrap{overflow-x:auto;border-radius:16px;border:1px solid var(--border);box-shadow:0 0 80px rgba(95,78,255,.07)}
+table{width:100%;border-collapse:collapse;min-width:1180px}
+thead tr{background:var(--surface);border-bottom:2px solid var(--accent2)}
+th{padding:15px 12px;text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+th:first-child{padding-left:22px;width:52px}
+th.c{text-align:center}
+tbody tr{border-bottom:1px solid var(--border);transition:background .14s}
+tbody tr:hover{background:rgba(95,78,255,.04)}
+.rs5{background:rgba(200,245,69,.025)}
+.rs4{background:rgba(95,78,255,.018)}
+td{padding:12px 12px;vertical-align:middle}
+td:first-child{padding-left:22px}
+.rk{font-size:11px;color:var(--muted);text-align:center;font-weight:700}
+.rm{font-size:19px;text-align:center;line-height:1}
+.mn{font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;color:var(--text);letter-spacing:-.01em;line-height:1.35}
+.mi{font-size:9px;color:var(--muted);margin-top:3px;letter-spacing:.03em}
+.ft{display:inline-block;background:rgba(200,245,69,.1);color:var(--accent);font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;border:1px solid rgba(200,245,69,.2);margin-left:5px;letter-spacing:.08em;vertical-align:middle}
+.exp{font-size:8px;color:var(--red);margin-top:3px}
+.ctx{font-size:11px;color:var(--cyan);white-space:nowrap}
+.cc{text-align:center;padding:12px 6px}
+.cv{font-size:13px;font-weight:700;line-height:1}
+.cs{font-size:8px;display:block;margin-top:2px;letter-spacing:-1px;line-height:1}
+.v7{color:#c8f545}.v6{color:#a8d63a}.v5{color:#ffd166}.v4{color:#f0a824}.v3{color:#888aaa}.v2{color:#444466}.v1{color:#282840}.vx{color:#1a1a2e}
+.s7{color:#c8f545}.s6{color:#a0c830}.s5{color:#ffd166}.s4{color:#f0a824}.s3{color:#6a6a8a}.s2{color:#323248}.s1{color:#1e1e30}
+.tc{text-align:center;padding:12px 10px}
+.ts{font-family:'Unbounded',sans-serif;font-size:20px;font-weight:900;line-height:1}
+.tm{font-size:9px;color:var(--muted);display:block}
+.tb{width:64px;height:4px;background:var(--border);border-radius:2px;margin:5px auto 0;overflow:hidden}
+.tf{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+.tier-divider td{background:var(--surface)!important;padding:8px 22px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.tl{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:10px;color:var(--muted)}
+.tl::after{content:'';flex:1;height:1px;background:var(--border)}
+.tp{display:inline-block;padding:3px 9px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.tp5{background:rgba(200,245,69,.15);color:var(--accent);border:1px solid rgba(200,245,69,.3)}
+.tp4{background:rgba(95,78,255,.15);color:#a590ff;border:1px solid rgba(95,78,255,.3)}
+.tp3{background:rgba(255,209,102,.1);color:var(--gold);border:1px solid rgba(255,209,102,.25)}
+.tp2{background:rgba(74,222,128,.1);color:var(--green);border:1px solid rgba(74,222,128,.2)}
+.tp1{background:rgba(74,74,106,.15);color:var(--muted);border:1px solid rgba(74,74,106,.3)}
+.notes{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.note{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px}
+.nt{font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.nv{font-family:'Unbounded',sans-serif;font-size:13px;font-weight:700;margin-bottom:8px;line-height:1.3}
+.nd{font-size:10px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="glow"></div><div class="glow2"></div>
+<div class="wrapper">
+
+<header>
+  <div class="badge"><span class="dot"></span>Live Data · OpenRouter API · 29 modèles gratuits · Fév 2025</div>
+  <h1>Classement des modèles<br><em>100% Gratuits</em></h1>
+  <p class="sub">
+    Scores individuels sur 7 domaines (1–7 ★) · Score max = <b>49</b><br>
+    Source : <b>openrouter.ai/api/v1/models</b> · prompt=$0 · completion=$0<br>
+    Évaluation basée sur documentation + benchmarks publics (SWE-bench, MMLU, LiveCodeBench, GPQA…)
+  </p>
+</header>
+
+<div class="legend">
+  <div class="li"><span>💻</span>&nbsp;Coding</div>
+  <div class="li"><span>🧠</span>&nbsp;Reasoning</div>
+  <div class="li"><span>💬</span>&nbsp;Chat</div>
+  <div class="li"><span>📄</span>&nbsp;Long Context</div>
+  <div class="li"><span>👁️</span>&nbsp;Vision</div>
+  <div class="li"><span>🎵</span>&nbsp;Audio</div>
+  <div class="li"><span>🌍</span>&nbsp;Traduction</div>
+  <div class="li" style="border-color:var(--gold);color:var(--gold)">★ score /7 par domaine · Total /49</div>
+</div>
+
+<div class="tbl-wrap"><table>
+<thead><tr>
+  <th>#</th><th>Modèle</th><th>Contexte</th>
+  <th class="c">💻</th><th class="c">🧠</th><th class="c">💬</th><th class="c">📄</th><th class="c">👁️</th><th class="c">🎵</th><th class="c">🌍</th>
+  <th class="c">⭐ Total</th>
+</tr></thead>
+<tbody>
+
+<tr class="tier-divider"><td colspan="11"><span class="tl"><span class="tp tp5">★★★★★ Élite — 30+ pts</span></span></td></tr>
+
+<tr class="rs5">
+  <td class="rm">🥇</td>
+  <td><div class="mn">Qwen3 VL 235B A22B Thinking<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-vl-235b-a22b-thinking</div></td>
+  <td><span class="ctx">262 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--accent)">32</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:65%"></div></div></td>
+</tr>
+
+<tr class="tier-divider"><td colspan="11"><span class="tl"><span class="tp tp4">★★★★ Excellent — 25–29 pts</span></span></td></tr>
+
+<tr class="rs4">
+  <td class="rm">🥈</td>
+  <td><div class="mn">Qwen3 235B A22B Thinking 2507<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-235b-a22b-thinking-2507</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">29</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:59%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rm">🥉</td>
+  <td><div class="mn">Qwen3 Next 80B A3B Instruct<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-next-80b-a3b-instruct:free</div></td>
+  <td><span class="ctx">262 k</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">27</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:55%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">4</td>
+  <td><div class="mn">Hermes 3 LLaMA 3.1 405B<span class="ft">FREE</span></div><div class="mi">nousresearch/hermes-3-llama-3.1-405b:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">26</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:53%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">5</td>
+  <td><div class="mn">DeepSeek R1 0528<span class="ft">FREE</span></div><div class="mi">deepseek/deepseek-r1-0528:free</div></td>
+  <td><span class="ctx">163 k</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">25</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:51%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">6</td>
+  <td><div class="mn">LLaMA 3.3 70B Instruct<span class="ft">FREE</span></div><div class="mi">meta-llama/llama-3.3-70b-instruct:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">25</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:51%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">7</td>
+  <td><div class="mn">Qwen3 VL 30B A3B Thinking<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-vl-30b-a3b-thinking</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">25</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:51%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">8</td>
+  <td><div class="mn">Mistral Small 3.1 24B Instruct<span class="ft">FREE</span></div><div class="mi">mistralai/mistral-small-3.1-24b-instruct:free</div></td>
+  <td><span class="ctx">128 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">25</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:51%"></div></div></td>
+</tr>
+
+<tr class="rs4">
+  <td class="rk">9</td>
+  <td><div class="mn">Gemma 3 27B IT<span class="ft">FREE</span></div><div class="mi">google/gemma-3-27b-it:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:#a590ff">25</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:51%"></div></div></td>
+</tr>
+
+<tr class="tier-divider"><td colspan="11"><span class="tl"><span class="tp tp3">★★★ Bon — 21–24 pts</span></span></td></tr>
+
+<tr>
+  <td class="rk">10</td>
+  <td><div class="mn">GPT-OSS 120B<span class="ft">FREE</span></div><div class="mi">openai/gpt-oss-120b:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">24</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:49%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">11</td>
+  <td><div class="mn">StepFun Step 3.5 Flash<span class="ft">FREE</span></div><div class="mi">stepfun/step-3.5-flash:free</div></td>
+  <td><span class="ctx">256 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">23</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:47%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">12</td>
+  <td><div class="mn">Z.AI GLM 4.5 Air<span class="ft">FREE</span></div><div class="mi">z-ai/glm-4.5-air:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">23</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:47%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">13</td>
+  <td><div class="mn">Qwen3 Coder<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-coder:free</div></td>
+  <td><span class="ctx">256 k</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">23</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:47%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">14</td>
+  <td><div class="mn">Arcee Trinity Large Preview<span class="ft">FREE</span></div><div class="mi">arcee-ai/trinity-large-preview:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">22</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:45%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">15</td>
+  <td><div class="mn">Upstage Solar Pro 3<span class="ft">FREE</span></div><div class="mi">upstage/solar-pro-3:free</div><div class="exp">⚠ Expire le 02 mars 2026</div></td>
+  <td><span class="ctx">128 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">22</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:45%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">16</td>
+  <td><div class="mn">NVIDIA Nemotron Nano 12B VL<span class="ft">FREE</span></div><div class="mi">nvidia/nemotron-nano-12b-v2-vl:free</div></td>
+  <td><span class="ctx">128 k</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--gold)">21</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:43%"></div></div></td>
+</tr>
+
+<tr class="tier-divider"><td colspan="11"><span class="tl"><span class="tp tp2">★★ Correct — 15–20 pts</span></span></td></tr>
+
+<tr>
+  <td class="rk">17</td>
+  <td><div class="mn">Arcee Trinity Mini<span class="ft">FREE</span></div><div class="mi">arcee-ai/trinity-mini:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v5">5</span><span class="cs s5">★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">20</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:41%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">18</td>
+  <td><div class="mn">GPT-OSS 20B<span class="ft">FREE</span></div><div class="mi">openai/gpt-oss-20b:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">18</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:37%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">19</td>
+  <td><div class="mn">NVIDIA Nemotron 3 Nano 30B A3B<span class="ft">FREE</span></div><div class="mi">nvidia/nemotron-3-nano-30b-a3b:free</div></td>
+  <td><span class="ctx">256 k</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v6">6</span><span class="cs s6">★★★★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">19</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:39%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">20</td>
+  <td><div class="mn">Gemma 3 12B IT<span class="ft">FREE</span></div><div class="mi">google/gemma-3-12b-it:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">19</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:39%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">21</td>
+  <td><div class="mn">Dolphin Mistral 24B Venice<span class="ft">FREE</span></div><div class="mi">cognitivecomputations/dolphin-mistral-24b-venice-edition:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v7">7</span><span class="cs s7">★★★★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">17</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:35%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">22</td>
+  <td><div class="mn">NVIDIA Nemotron Nano 9B V2<span class="ft">FREE</span></div><div class="mi">nvidia/nemotron-nano-9b-v2:free</div></td>
+  <td><span class="ctx">128 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v4">4</span><span class="cs s4">★★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">16</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:33%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">23</td>
+  <td><div class="mn">Gemma 3n E4B IT<span class="ft">FREE</span></div><div class="mi">google/gemma-3n-e4b-it:free · Audio natif (edge)</div></td>
+  <td><span class="ctx">8 k</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">16</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:33%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">24</td>
+  <td><div class="mn">Qwen3 4B<span class="ft">FREE</span></div><div class="mi">qwen/qwen3-4b:free</div></td>
+  <td><span class="ctx">32 k</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--green)">15</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:31%"></div></div></td>
+</tr>
+
+<tr class="tier-divider"><td colspan="11"><span class="tl"><span class="tp tp1">★ Limité — &lt;15 pts (petits modèles / edge)</span></span></td></tr>
+
+<tr>
+  <td class="rk">25</td>
+  <td><div class="mn">Gemma 3 4B IT<span class="ft">FREE</span></div><div class="mi">google/gemma-3-4b-it:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--muted)">13</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:27%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">26</td>
+  <td><div class="mn">LLaMA 3.2 3B Instruct<span class="ft">FREE</span></div><div class="mi">meta-llama/llama-3.2-3b-instruct:free</div></td>
+  <td><span class="ctx">131 k</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--muted)">11</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:22%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">27</td>
+  <td><div class="mn">Gemma 3n E2B IT<span class="ft">FREE</span></div><div class="mi">google/gemma-3n-e2b-it:free · Mobile/Edge</div></td>
+  <td><span class="ctx">8 k</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--muted)">10</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:20%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">28</td>
+  <td><div class="mn">LiquidAI LFM2.5 1.2B Thinking<span class="ft">FREE</span></div><div class="mi">liquid/lfm-2.5-1.2b-thinking:free</div></td>
+  <td><span class="ctx">32 k</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v3">3</span><span class="cs s3">★★★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--muted)">9</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:18%"></div></div></td>
+</tr>
+
+<tr>
+  <td class="rk">29</td>
+  <td><div class="mn">LiquidAI LFM2.5 1.2B Instruct<span class="ft">FREE</span></div><div class="mi">liquid/lfm-2.5-1.2b-instruct:free</div></td>
+  <td><span class="ctx">32 k</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv v2">2</span><span class="cs s2">★★</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv vx">—</span></td>
+  <td class="cc"><span class="cv v1">1</span><span class="cs s1">★</span></td>
+  <td class="tc"><span class="ts" style="color:var(--muted)">6</span><span class="tm">/49</span><div class="tb"><div class="tf" style="width:12%"></div></div></td>
+</tr>
+
+</tbody></table></div>
+
+<div class="notes">
+  <div class="note" style="border-color:rgba(200,245,69,.2)">
+    <div class="nt">🏆 N°1 absolu · Vision + Reasoning</div>
+    <div class="nv" style="color:var(--accent)">Qwen3 VL 235B A22B Thinking</div>
+    <div class="nd">Seul modèle gratuit combinant Reasoning 7/7 + Vision 7/7. 262k ctx. Idéal : STEM visuel, images complexes, diagrammes, math.</div>
+  </div>
+  <div class="note" style="border-color:rgba(95,78,255,.25)">
+    <div class="nt">🧠 Best Reasoning pur (texte)</div>
+    <div class="nv" style="color:#a590ff">DeepSeek R1 0528</div>
+    <div class="nd">7/7 Reasoning · 6/7 Coding · Référence mondiale open-source · Perf. comparable GPT-o1 sur math/logique · 163k ctx.</div>
+  </div>
+  <div class="note" style="border-color:rgba(255,209,102,.2)">
+    <div class="nt">💻 Best Code / SWE</div>
+    <div class="nv" style="color:var(--gold)">Qwen3 Coder</div>
+    <div class="nd">7/7 Coding · Spécialisé agentic coding & SWE-bench · 256k contexte · Meilleur pour pipelines autonomes et CLI agents.</div>
+  </div>
+  <div class="note" style="border-color:rgba(74,222,128,.15)">
+    <div class="nt">💬 Best Chat / Roleplay</div>
+    <div class="nv" style="color:var(--green)">Arcee Trinity Large Preview</div>
+    <div class="nd">7/7 Chat · 400B params · Storytelling, companions, roleplay. Dolphin Mistral Venice aussi 7/7 (uncensored, Mistral 24B base).</div>
+  </div>
+  <div class="note" style="border-color:rgba(0,245,212,.15)">
+    <div class="nt">📄 Best Long Context</div>
+    <div class="nv" style="color:var(--cyan)">Qwen3 Next 80B + StepFun 3.5 Flash</div>
+    <div class="nd">Tous deux 7/7 Long Context · Qwen3 Next = 262k polyvalent · StepFun = 256k + Reasoning 6/7 · Idéaux pour de gros docs.</div>
+  </div>
+  <div class="note" style="border-color:rgba(255,94,108,.2)">
+    <div class="nt">🎵 Audio · 🌍 Traduction</div>
+    <div class="nv" style="color:var(--red)">Audio inexistant · Ko/Ja → Upstage</div>
+    <div class="nd">Zéro modèle audio réellement gratuit. Gemma 3n E4B/E2B ont audio natif mais limités (8k ctx, edge). Upstage Solar Pro 3 = 7/7 traduction Ko·En·Ja.</div>
+  </div>
+</div>
+
+<footer style="margin-top:44px;text-align:center;font-size:10px;color:var(--muted)">
+  29 modèles · Données live <b>openrouter.ai/api/v1/models</b> · openrouter/free (routeur méta) exclu · Scores : benchmarks publics SWE-bench, MMLU, LiveCodeBench, GPQA… · <b>Fév 2025</b>
+</footer>
+
+</div>
+</body>
+</html>

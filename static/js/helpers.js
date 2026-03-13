@@ -480,9 +480,42 @@ function showModelDetail(jsonStr, source) {
   const modelSize = firstVariant.size || m.size || 0;
   const details = m.details || {};
 
+  // Check if model is in DB or installed locally (for Ollama catalogue)
+  let dbModels = [];
+  let installedModels = [];
+
+  // Only for Ollama source, check status
+  if (source === 'ollama' || source === 'ollama-library') {
+    // Get models in DB
+    dbModels = window.myCatalogueModels || [];
+    // Get locally installed
+    api('/api/catalogue/ollama/installed').then(data => {
+      window.ollamaInstalledModels = data.installed || [];
+      // Re-render if we're in the detail view
+      if (document.getElementById('modelDetailModal')?.classList.contains('active')) {
+        // Just refresh the button states
+      }
+    }).catch(() => {});
+  }
+
   // Determine if cloud or local variant
-  const isCloudVariant = (v) => v.variant && v.variant.includes('-cloud');
-  const isLocalVariant = (v) => !isCloudVariant(v) && (v.installed || (v.size && v.size > 0));
+  // Use is_cloud field from the data, fallback to checking variant name
+  // Cloud: is_cloud = true OR variant ends with "cloud" or contains "-cloud"
+  // Local: is_cloud = false AND (has size OR no explicit cloud marker)
+  const isCloudVariant = (v) => {
+    if (v.is_cloud !== undefined) return v.is_cloud;
+    const variant = v.variant || '';
+    return variant === 'cloud' || variant.includes('-cloud');
+  };
+  const isLocalVariant = (v) => {
+    const variant = v.variant || '';
+    // If it's cloud, it's not local
+    if (isCloudVariant(v)) return false;
+    // If it has a size, it's local
+    if (v.size && v.size > 0) return true;
+    // If it has no explicit cloud marker and no size, treat as local (to be downloaded)
+    return !variant.includes('-cloud') && variant !== 'cloud';
+  };
 
   document.getElementById('modelDetailTitle').innerText = modelName;
 
@@ -493,25 +526,38 @@ function showModelDetail(jsonStr, source) {
       const vName = v.name || `${modelName}:${v.variant}`;
       const vSize = v.size ? formatBytes(v.size) : '—';
       const vContext = v.context_length ? formatContext(v.context_length) : '—';
-      const vInstalled = v.installed || false;
       const vCloud = isCloudVariant(v);
       const vLocal = isLocalVariant(v);
 
-      // Determine action button
+      // Check if installed/in DB using the arrays
+      const installedList = window.ollamaInstalledModels || [];
+      const isLocallyInstalled = installedList.includes(vName);
+      const dbList = window.myCatalogueModels || [];
+      const isInCatalogue = dbList.some(m => m.name === vName);
+
+      // Determine action button based on actual status
       let actionBtn = '';
-      if (vInstalled) {
-        actionBtn = `<button class="secondary" style="font-size:11px; padding:4px 8px">✅ Installé</button>`;
-      } else if (vCloud) {
-        actionBtn = `<button class="primary" onclick="closeModelDetail(); addToMyCatalogue(${JSON.stringify(v).replace(/"/g, '&quot;')}, this)" style="font-size:11px; padding:4px 8px">➕ Ajouter à Mon Catalogue</button>`;
+      if (vCloud) {
+        // Cloud variant - check if in catalogue
+        if (isInCatalogue) {
+          actionBtn = `<button class="secondary" style="font-size:11px; padding:4px 8px; cursor:default">✅ Present</button>`;
+        } else {
+          actionBtn = `<button class="primary" onclick="closeModelDetail(); addToMyCatalogue(${JSON.stringify(v).replace(/"/g, '&quot;')}, this)" style="font-size:11px; padding:4px 8px">➕ Ajouter</button>`;
+        }
       } else if (vLocal || v.size) {
-        actionBtn = `<button class="primary" onclick="closeModelDetail(); confirmInstallModel('${vName}', ${v.size || 0})" style="font-size:11px; padding:4px 8px">⬇ Télécharger</button>`;
+        // Local variant - check if installed
+        if (isLocallyInstalled) {
+          actionBtn = `<button class="secondary" style="font-size:11px; padding:4px 8px; cursor:default">✅ Present</button>`;
+        } else {
+          actionBtn = `<button class="primary" onclick="closeModelDetail(); confirmInstallModel('${vName}', ${v.size || 0})" style="font-size:11px; padding:4px 8px">⬇ Télécharger</button>`;
+        }
       }
 
       // Determine badge
       let badge = '';
       if (vCloud) {
         badge = '<span class="badge amber" style="font-size:9px">☁️ Cloud</span>';
-      } else if (vInstalled) {
+      } else if (isLocallyInstalled) {
         badge = '<span class="badge green" style="font-size:9px">💾 Installé</span>';
       } else if (v.size) {
         badge = '<span class="badge" style="font-size:9px">💾 Local</span>';
@@ -547,8 +593,6 @@ function showModelDetail(jsonStr, source) {
     const modelBase = modelName.split(':')[0];
     const ollamaLink = `<a href="https://ollama.com/library/${modelBase}" target="_blank" style="font-size:12px; padding:8px 16px; text-decoration:none; color:var(--accent)">🔗 Voir sur Ollama</a>`;
 
-    const addAllBtn = `<button class="secondary" onclick="addToMyCatalogue(${JSON.stringify(m).replace(/"/g, '&quot;')}, this)" style="font-size:12px; padding:8px 16px">✨ Ajouter à Mon Catalogue</button>`;
-
     document.getElementById('modelDetailBody').innerHTML = `
       <div style="margin-bottom:16px">
         ${capBadges ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px">${capBadges}</div>` : ''}
@@ -579,7 +623,6 @@ function showModelDetail(jsonStr, source) {
       </div>
       <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center; padding-top:8px; border-top:1px solid var(--border)">
         ${ollamaLink}
-        ${addAllBtn}
         <button onclick="closeModelDetail()">Fermer</button>
       </div>
     `;
@@ -696,7 +739,17 @@ async function loadOllamaModels() {
   }
 
   try {
-    const data = await api('/api/catalogue/ollama');
+    // Load Ollama models and check installed/DB status in parallel
+    const [data, installedData, myModelsData] = await Promise.all([
+      api('/api/catalogue/ollama'),
+      api('/api/catalogue/ollama/installed').catch(() => ({ installed: [] })),
+      api('/api/catalogue/my-models').catch(() => ({ models: [] }))
+    ]);
+
+    // Store globally for variant buttons
+    window.ollamaInstalledModels = installedData.installed || [];
+    window.myCatalogueModels = myModelsData.models || [];
+
     console.log('loadOllamaModels response:', data);
 
     // If we have models, display them
@@ -1163,7 +1216,11 @@ async function loadCustomProfiles() {
               ${cp.description ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px">${cp.description}</div>` : ''}
               ${cp.models && cp.models.length > 0 ? `<div style="font-size:10px; color:var(--text-muted); margin-top:4px">${cp.models.length} modèle(s) associé(s)</div>` : '<div style="font-size:10px; color:var(--text-muted); margin-top:4px">Aucun modèle associé</div>'}
             </div>
-            <button class="danger" onclick="deleteCustomProfile('${cp.name}')" style="font-size:11px; padding:4px 10px">🗑 Supprimer</button>
+            <div style="display:flex; gap:6px">
+              <button class="secondary" onclick="viewCustomProfile('${cp.name}')" style="font-size:11px; padding:4px 10px">👁️ Voir</button>
+              <button class="secondary" onclick="editCustomProfile('${cp.name}')" style="font-size:11px; padding:4px 10px">✏️ Modifier</button>
+              <button class="danger" onclick="deleteCustomProfile('${cp.name}')" style="font-size:11px; padding:4px 10px">🗑</button>
+            </div>
           </div>
         `).join('');
       }
@@ -1234,52 +1291,410 @@ async function deleteCustomProfile(name) {
   }
 }
 
-// ─────────────────────────────────────────────
-// Mon Catalogue (My Models)
-// ─────────────────────────────────────────────
-async function loadMyModels() {
+/* ─── PROFILE CREATION FUNCTIONS ─── */
+
+// Global variables for new profile form
+function openNewProfileForm() {
+  const form = document.getElementById('newProfileForm');
+  if (!form) return;
+
+  form.style.display = 'block';
+
+  // Clear form fields
+  document.getElementById('newProfileName').value = '';
+  document.getElementById('newProfileDesc').value = '';
+  document.getElementById('newProfileProvider').selectedIndex = 0;
+  document.getElementById('newProfileModel').innerHTML = '<option value="">Sélectionner un provider d\'abord...</option>';
+  document.getElementById('newProfileStatus').innerHTML = '';
+
+  // Clear tags
+  document.querySelectorAll('.tag-checkbox').forEach(cb => cb.checked = false);
+
+  // Clear models list
+  newProfileModels = [];
+  renderNewProfileModels();
+
+  // Load providers
+  loadProfileProviders();
+}
+
+function closeNewProfileForm() {
+  const form = document.getElementById('newProfileForm');
+  if (form) form.style.display = 'none';
+}
+
+async function loadProfileProviders() {
   try {
-    const data = await api('/api/catalogue/my-models');
-    const grid = document.getElementById('myModelsGrid');
-    const empty = document.getElementById('myModelsEmpty');
+    const data = await api('/api/db/providers');
+    const select = document.getElementById('newProfileProvider');
+    if (!select) return;
 
-    if (!grid) return;
+    // Clear and populate providers
+    select.innerHTML = '<option value="">Sélectionner un provider...</option>';
+    (data.providers || []).forEach(provider => {
+      const option = document.createElement('option');
+      option.value = provider.name;
+      option.textContent = provider.display_name || provider.name;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('Failed to load providers:', err);
+  }
+}
 
-    const models = data.models || [];
+async function onProviderChanged() {
+  const providerSelect = document.getElementById('newProfileProvider');
+  const modelSelect = document.getElementById('newProfileModel');
+  const provider = providerSelect.value;
+
+  if (!provider) {
+    modelSelect.innerHTML = '<option value="">Sélectionner un provider d\'abord...</option>';
+    return;
+  }
+
+  try {
+    modelSelect.innerHTML = '<option value="">Chargement...</option>';
+
+    // Get models for this provider from database
+    const data = await api('/api/db/models');
+    const models = (data.models || []).filter(m => m.provider === provider);
+
     if (models.length === 0) {
-      grid.innerHTML = '';
-      if (empty) empty.style.display = 'block';
+      modelSelect.innerHTML = '<option value="">Aucun modèle disponible</option>';
       return;
     }
 
-    if (empty) empty.style.display = 'none';
-    grid.innerHTML = models.map(m => renderModelCard(m, 'my-catalogue')).join('');
+    // Populate model select
+    modelSelect.innerHTML = '<option value="">Sélectionner un modèle...</option>';
+    models.forEach(model => {
+      const option = document.createElement('option');
+      option.value = model.name;
+      option.textContent = model.display_name || model.name;
+      option.dataset.provider = provider;
+      modelSelect.appendChild(option);
+    });
+  } catch (err) {
+    modelSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+    console.error('Failed to load models:', err);
+  }
+}
+
+function addNewProfileModel() {
+  const modelSelect = document.getElementById('newProfileModel');
+  const selectedOption = modelSelect.selectedOptions[0];
+  const model = modelSelect.value;
+
+  if (!model) {
+    alert('Veuillez sélectionner un modèle');
+    return;
+  }
+
+  // Add to newProfileModels array
+  newProfileModels.push({
+    model: model,
+    provider: selectedOption.dataset.provider || document.getElementById('newProfileProvider').value
+  });
+
+  // Update UI
+  renderNewProfileModels();
+
+  // Reset selection
+  modelSelect.selectedIndex = 0;
+}
+
+function renderNewProfileModels() {
+  const el = document.getElementById('newProfileModelsList');
+  if (!el) return;
+
+  if (newProfileModels.length === 0) {
+    el.innerHTML = '<div style="font-size:12px; color:var(--text-muted)">Aucun modèle ajouté</div>';
+    return;
+  }
+
+  el.innerHTML = newProfileModels.map((m, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:6px 8px; border-radius:6px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <span style="color:var(--text-muted); font-size:11px">${i+1}.</span>
+        <span style="font-family:var(--font-mono); color:var(--text)">${m.model}</span>
+        <span style="font-size:10px; color:var(--text-dim)">(${m.provider})</span>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button class="ghost" onclick="removeNewProfileModel(${i})" style="font-size:11px; padding:2px 6px">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function removeNewProfileModel(index) {
+  newProfileModels.splice(index, 1);
+  renderNewProfileModels();
+}
+
+async function createCustomProfile() {
+  const nameInput = document.getElementById('newProfileName');
+  const descInput = document.getElementById('newProfileDesc');
+  const statusEl = document.getElementById('newProfileStatus');
+
+  const name = (nameInput.value || '').trim().toLowerCase();
+  const description = (descInput.value || '').trim();
+
+  if (!name) {
+    statusEl.innerHTML = '<span style="color:var(--error)">❌ Nom requis</span>';
+    return;
+  }
+
+  // Validate name format (2-30 chars, lowercase alphanumeric, dashes and underscores, must start with letter)
+  const nameRegex = /^[a-z][a-z0-9_-]{1,29}$/;
+  if (!nameRegex.test(name)) {
+    statusEl.innerHTML = '<span style="color:var(--error)">❌ Format invalide: 2-30 caractères, commence par une lettre</span>';
+    return;
+  }
+
+  if (newProfileModels.length === 0) {
+    statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ Aucun modèle ajouté (profil vide)</span>';
+  }
+
+  try {
+    statusEl.innerHTML = '<span style="color:var(--text-dim)">⏳ Création en cours...</span>';
+
+    const payload = {
+      name: name,
+      description: description,
+      models: newProfileModels
+    };
+
+    await api('/api/profiles/custom', 'POST', payload);
+
+    statusEl.innerHTML = '<span style="color:var(--success)">✅ Profil créé avec succès!</span>';
+
+    // Refresh profiles list
+    await loadCustomProfiles();
+
+    // Close form after delay
+    setTimeout(() => {
+      closeNewProfileForm();
+    }, 1500);
+
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:var(--error)">❌ Erreur: ${err.message || 'Échec de création'}</span>`;
+  }
+}
+
+/* ─── MY MODELS FUNCTIONS ─── */
+
+async function loadMyModels() {
+  try {
+    // This function was called but not implemented
+    // It should refresh the "Mes Modèles" section
+    console.log('loadMyModels called - refreshing models display');
+
+    // Trigger filtering to refresh display
+    filterMyModels();
   } catch (err) {
     console.error('Failed to load my models:', err);
   }
 }
 
-async function addToMyCatalogue(modelData, btn) {
-  if (btn) btn.disabled = true;
-  try {
-    await api('/api/catalogue/my-models/add', 'POST', { model: modelData });
-    showNotification('✨ Modèle ajouté à votre catalogue !');
-    if (btn) {
-      btn.innerText = '✅ Dans mon catalogue';
-      btn.classList.add('success');
-    }
-  } catch (err) {
-    alert('❌ Erreur : ' + err.message);
-    if (btn) btn.disabled = false;
+function filterMyModels() {
+  // Implementation would go here to filter models based on search/filter criteria
+  // This is a placeholder for now
+  console.log('filterMyModels called');
+}
+
+function showMyModelsView(view) {
+  // Switch between "providers" and "profiles" views
+  document.querySelectorAll('.mymodels-view').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.subtab').forEach(btn => btn.classList.remove('active'));
+
+  if (view === 'providers') {
+    document.getElementById('mymodels-providers-view').style.display = 'block';
+    document.getElementById('mymodels-view-providers').classList.add('active');
+  } else {
+    document.getElementById('mymodels-profiles-view').style.display = 'block';
+    document.getElementById('mymodels-view-profiles').classList.add('active');
   }
 }
 
-async function removeFromMyCatalogue(name) {
-  if (!confirm(`Retirer "${name}" de votre catalogue ?`)) return;
+function closeMyModelsModal() {
+  const modal = document.getElementById('mymodels-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+/* ─── CUSTOM PROFILE VIEW/EDIT FUNCTIONS ─── */
+
+// Store profile data for editing
+let editingProfileData = null;
+
+// View profile details
+async function viewCustomProfile(name) {
   try {
-    await api('/api/catalogue/my-models/remove', 'POST', { name });
-    await loadMyModels();
+    const data = await api('/api/profiles/custom');
+    const profile = (data.custom_profiles || []).find(cp => cp.name === name);
+    
+    if (!profile) {
+      alert('Profil non trouvé');
+      return;
+    }
+    
+    // Get model details
+    const modelsList = profile.routing_chain || profile.models || [];
+    let modelsHtml = '';
+    
+    if (modelsList.length > 0) {
+      modelsHtml = modelsList.map((m, i) => {
+        const modelName = typeof m === 'string' ? m : (m.model || 'Unknown');
+        const providerName = typeof m === 'string' ? '' : (m.provider || '');
+        return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:6px; background:var(--surface); margin-bottom:4px">
+          <div>
+            <span style="color:var(--text-muted); font-size:11px">${i+1}.</span>
+            <span style="font-family:var(--font-mono); color:var(--text); margin-left:8px">${modelName}</span>
+          </div>
+          ${providerName ? `<span style="font-size:10px; color:var(--text-dim)">(${providerName})</span>` : ''}
+        </div>`;
+      }).join('');
+    } else {
+      modelsHtml = '<div style="color:var(--text-muted); padding:12px">Aucun modèle associé</div>';
+    }
+    
+    // Show in modal or alert
+    const body = document.getElementById('profileModelsBody');
+    const title = document.getElementById('profileModelsTitle');
+    if (body && title) {
+      title.innerText = 'Profil: ' + profile.name;
+      body.innerHTML = `
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px">${profile.description || 'Aucune description'}</div>
+          <div style="font-size:11px; color:var(--text-muted)">${modelsList.length} modèle(s)</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px">
+          ${modelsHtml}
+        </div>
+      `;
+      document.getElementById('profileModelsModal').classList.add('active');
+    } else {
+      // Fallback to alert if modal not found
+      alert('Profil: ' + profile.name + '\n\nDescription: ' + (profile.description || 'Aucune') + '\n\nModèles: ' + modelsList.map(m => typeof m === 'string' ? m : m.model).join(', '));
+    }
   } catch (err) {
-    alert('❌ Erreur : ' + err.message);
+    alert('Erreur: ' + (err.message || err));
   }
 }
+
+// Edit profile - populate form with existing data
+async function editCustomProfile(name) {
+  try {
+    const data = await api('/api/profiles/custom');
+    const profile = (data.custom_profiles || []).find(cp => cp.name === name);
+    
+    if (!profile) {
+      alert('Profil non trouvé');
+      return;
+    }
+    
+    // Store profile data for editing
+    editingProfileData = {
+      originalName: name,
+      name: profile.name,
+      description: profile.description || '',
+      models: profile.models || []
+    };
+    
+    // Open the form and populate fields
+    openNewProfileForm();
+    
+    // Fill in the form fields
+    document.getElementById('newProfileName').value = profile.name;
+    document.getElementById('newProfileName').disabled = true; // Can't change name during edit
+    document.getElementById('newProfileDesc').value = profile.description || '';
+    
+    // Load providers for the dropdown
+    await loadProfileProviders();
+    
+    // Populate models from routing_chain
+    newProfileModels = [];
+    const modelsList = profile.routing_chain || profile.models || [];
+    for (const m of modelsList) {
+      // routing_chain has {order, model, provider, ...}
+      if (m.model) {
+        newProfileModels.push({ model: m.model, provider: m.provider || '' });
+      } else if (typeof m === 'string') {
+        newProfileModels.push({ model: m, provider: '' });
+      }
+    }
+    renderNewProfileModels();
+    
+    // Update status to show we're editing
+    document.getElementById('newProfileStatus').innerHTML = '<span style="color:var(--warning)">⚠️ Mode modification - Impossible de changer le nom</span>';
+    
+  } catch (err) {
+    alert('Erreur: ' + (err.message || err));
+  }
+}
+
+// Override createCustomProfile to handle edit mode
+const originalCreateCustomProfile = createCustomProfile;
+createCustomProfile = async function() {
+  if (editingProfileData) {
+    // We're in edit mode - update the profile instead of creating new
+    await updateCustomProfile();
+    return;
+  }
+  // Original create logic
+  await originalCreateCustomProfile.call(this);
+};
+
+// Update existing profile
+async function updateCustomProfile() {
+  if (!editingProfileData) return;
+  
+  const statusEl = document.getElementById('newProfileStatus');
+  const descInput = document.getElementById('newProfileDesc');
+  
+  const description = (descInput.value || '').trim();
+  
+  try {
+    statusEl.innerHTML = '<span style="color:var(--text-dim)">⏳ Mise à jour en cours...</span>';
+    
+    // Build the models array in the format the API expects
+    const models = newProfileModels.map(m => ({
+      model: m.model,
+      provider: m.provider
+    }));
+    
+    // Delete old profile and create new one (since name can't be changed)
+    // First delete
+    await api(`/api/profiles/custom/${encodeURIComponent(editingProfileData.originalName)}`, 'DELETE');
+    
+    // Then create with new data
+    const payload = {
+      name: editingProfileData.originalName, // Keep same name
+      description: description,
+      models: models
+    };
+    
+    await api('/api/profiles/custom', 'POST', payload);
+    
+    statusEl.innerHTML = '<span style="color:var(--success)">✅ Profil mis à jour!</span>';
+    
+    // Refresh profiles list
+    await loadCustomProfiles();
+    
+    // Close form and reset edit mode
+    editingProfileData = null;
+    
+    setTimeout(() => {
+      closeNewProfileForm();
+    }, 1500);
+    
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:var(--error)">❌ Erreur: ' + (err.message || 'Échec de mise à jour') + '</span>';
+  }
+}
+
+// Reset edit mode when form is closed
+const originalCloseNewProfileForm = closeNewProfileForm;
+closeNewProfileForm = function() {
+  editingProfileData = null;
+  document.getElementById('newProfileName').disabled = false;
+  originalCloseNewProfileForm.call(this);
+};

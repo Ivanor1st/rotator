@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from constants import Provider, Defaults, RateLimits
 from router import RouteTarget
 
 
@@ -31,13 +32,14 @@ class KeyManager:
                 return str(os.environ.get(raw[2:-1].strip(), "")).strip()
             return raw
 
+        # Use constants for rotation and rate limits
         self.rotate_after_errors = {
-            "nvidia": 3,
-            "ollama_cloud": 3,
-            "openrouter": 5,
-            "google": 3,
+            Provider.NVIDIA.value: 3,
+            Provider.OLLAMA_CLOUD.value: 3,
+            Provider.OPENROUTER.value: 5,
+            Provider.GOOGLE.value: 3,
         }
-        self.rpm_limits = {"nvidia": 35}
+        self.rpm_limits = {Provider.NVIDIA.value: RateLimits.RPM.get(Provider.NVIDIA.value)}
         self.daily_limits = {
             "gemma-3-27b-it": 14000,
             "gemma-3-12b-it": 14000,
@@ -45,48 +47,69 @@ class KeyManager:
         }
         self.cooldown = timedelta(hours=1)
 
+        # Use constants for provider names
         self.keys_by_provider: dict[str, list[KeyRecord]] = {
-            "ollama_cloud": [
+            Provider.OLLAMA_CLOUD.value: [
                 KeyRecord(
-                    f"ollama_cloud:{idx}",
+                    f"{Provider.OLLAMA_CLOUD.value}:{idx+1}",
                     resolve_secret(item.get("token", "")),
                     item.get("label", f"Ollama {idx+1}"),
-                    "ollama_cloud",
+                    Provider.OLLAMA_CLOUD.value,
                 )
-                for idx, item in enumerate(config.get("keys", {}).get("ollama_cloud", []))
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.OLLAMA_CLOUD.value, []))
                 if resolve_secret(item.get("token", ""))
             ],
-            "nvidia": [
+            Provider.NVIDIA.value: [
                 KeyRecord(
-                    f"nvidia:{idx}",
+                    f"{Provider.NVIDIA.value}:{idx+1}",
                     resolve_secret(item.get("key", "")),
                     item.get("label", f"NVIDIA {idx+1}"),
-                    "nvidia",
+                    Provider.NVIDIA.value,
                 )
-                for idx, item in enumerate(config.get("keys", {}).get("nvidia", []))
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.NVIDIA.value, []))
                 if resolve_secret(item.get("key", ""))
             ],
-            "openrouter": [
+            Provider.OPENROUTER.value: [
                 KeyRecord(
-                    f"openrouter:{idx}",
+                    f"{Provider.OPENROUTER.value}:{idx+1}",
                     resolve_secret(item.get("key", "")),
                     item.get("label", "OpenRouter"),
-                    "openrouter",
+                    Provider.OPENROUTER.value,
                 )
-                for idx, item in enumerate(config.get("keys", {}).get("openrouter", []))
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.OPENROUTER.value, []))
                 if resolve_secret(item.get("key", ""))
             ],
-            "google": [
+            Provider.GOOGLE.value: [
                 KeyRecord(
-                    f"google:{idx}",
+                    f"{Provider.GOOGLE.value}:{idx+1}",
                     resolve_secret(item.get("key", "")),
                     item.get("label", f"Google {idx+1}"),
-                    "google",
+                    Provider.GOOGLE.value,
                 )
-                for idx, item in enumerate(config.get("keys", {}).get("google", []))
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.GOOGLE.value, []))
                 if resolve_secret(item.get("key", ""))
             ],
-            "local": [KeyRecord("local:0", "", "Local Ollama", "local")],
+            Provider.OPENAI.value: [
+                KeyRecord(
+                    f"{Provider.OPENAI.value}:{idx+1}",
+                    resolve_secret(item.get("key", "")),
+                    item.get("label", f"OpenAI {idx+1}"),
+                    Provider.OPENAI.value,
+                )
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.OPENAI.value, []))
+                if resolve_secret(item.get("key", ""))
+            ],
+            Provider.ANTHROPIC.value: [
+                KeyRecord(
+                    f"{Provider.ANTHROPIC.value}:{idx+1}",
+                    resolve_secret(item.get("key", "")),
+                    item.get("label", f"Anthropic {idx+1}"),
+                    Provider.ANTHROPIC.value,
+                )
+                for idx, item in enumerate(config.get("keys", {}).get(Provider.ANTHROPIC.value, []))
+                if resolve_secret(item.get("key", ""))
+            ],
+            Provider.LOCAL.value: [KeyRecord(f"{Provider.LOCAL.value}:0", "", "Local Ollama", Provider.LOCAL.value)],
         }
 
         self.consecutive_errors: dict[str, int] = defaultdict(int)
@@ -146,12 +169,36 @@ class KeyManager:
         if not eligible:
             return None
 
+        def score(item: KeyRecord) -> tuple[int, int, int]:
+            errs = self.consecutive_errors.get(item.key_id, 0)
+            rpm = self._rpm_count(item.key_id)
+            used = self._daily_quota_used(item.provider, target.model, item.key_id)
+            return (errs, rpm, used)
+
+        return sorted(eligible, key=score)[0]
+
+    def choose_keys_for_target(self, target: RouteTarget) -> list[KeyRecord]:
+        """Return all eligible keys for a given target, ordered by score (low rpm, low daily usage first).
+
+        This allows callers to try multiple keys for the same provider/model before
+        moving on to the next provider.
+        """
+        if target.provider in self.suspended_providers:
+            return []
+        keys = self.keys_by_provider.get(target.provider, [])
+        if not keys:
+            return []
+
+        eligible = [key for key in keys if self._is_key_eligible(key, target.model)]
+        if not eligible:
+            return []
+
         def score(item: KeyRecord) -> tuple[int, int]:
             rpm = self._rpm_count(item.key_id)
             used = self._daily_quota_used(item.provider, target.model, item.key_id)
             return (rpm, used)
 
-        return sorted(eligible, key=score)[0]
+        return sorted(eligible, key=score)
 
     def block_key(self, key_id: str) -> None:
         self.blocked_keys.add(key_id)
@@ -186,7 +233,7 @@ class KeyManager:
         if provider in self.rpm_limits:
             self.rpm_windows[key_id].append(datetime.now(UTC))
 
-        if provider == "google" or model in self.daily_limits:
+        if provider == Provider.GOOGLE.value or model in self.daily_limits:
             quota_key = f"{provider}:{model}:{key_id}"
             self.daily_quota_map[quota_key] = self.daily_quota_map.get(quota_key, 0) + 1
 

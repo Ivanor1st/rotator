@@ -4,6 +4,8 @@ import main
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from constants import Provider, Profile
+
 
 client = TestClient(main.app)
 
@@ -14,7 +16,7 @@ def test_v1_models():
     data = r.json()
     assert data["object"] == "list"
     ids = [d["id"] for d in data["data"]]
-    assert "coding" in ids
+    assert Profile.CODING.value in ids
     assert "claude-sonnet-4-6" in ids
 
 
@@ -27,7 +29,7 @@ def test_get_config_keys():
 
 
 def test_test_provider_key_empty():
-    r = client.post("/api/config/keys/test", json={"provider": "google", "value": ""})
+    r = client.post("/api/config/keys/test", json={"provider": Provider.GOOGLE.value, "value": ""})
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is False
@@ -35,7 +37,7 @@ def test_test_provider_key_empty():
 
 
 def test_test_provider_key_bad_format():
-    r = client.post("/api/config/keys/test", json={"provider": "google", "value": "badkey"})
+    r = client.post("/api/config/keys/test", json={"provider": Provider.GOOGLE.value, "value": "badkey"})
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is False
@@ -43,7 +45,7 @@ def test_test_provider_key_bad_format():
 
 
 def test_test_provider_key_env_reference_missing_var():
-    r = client.post("/api/config/keys/test", json={"provider": "google", "value": "env:__MISSING_TEST_VAR__"})
+    r = client.post("/api/config/keys/test", json={"provider": Provider.GOOGLE.value, "value": "env:__MISSING_TEST_VAR__"})
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is False
@@ -85,20 +87,20 @@ def test_resume_proxy_and_provider_behaviors():
     assert status_resumed.status_code == 200
     assert status_resumed.json().get("paused") is False
 
-    suspended = client.post("/api/suspend", json={"provider": "nvidia"})
+    suspended = client.post("/api/suspend", json={"provider": Provider.NVIDIA.value})
     assert suspended.status_code == 200
 
     with_susp = client.get("/api/suspensions")
     assert with_susp.status_code == 200
-    assert "nvidia" in with_susp.json().get("suspensions", {})
+    assert Provider.NVIDIA.value in with_susp.json().get("suspensions", {})
 
-    resumed_provider = client.post("/api/resume", json={"provider": "nvidia"})
+    resumed_provider = client.post("/api/resume", json={"provider": Provider.NVIDIA.value})
     assert resumed_provider.status_code == 200
     assert resumed_provider.json().get("ok") is True
 
     no_susp = client.get("/api/suspensions")
     assert no_susp.status_code == 200
-    assert "nvidia" not in no_susp.json().get("suspensions", {})
+    assert Provider.NVIDIA.value not in no_susp.json().get("suspensions", {})
 
 
 def test_invalid_project_token_rejected_on_models():
@@ -195,7 +197,7 @@ def test_create_project_and_coding_only_policy_models():
     models = client.get("/v1/models", headers={"Authorization": f"Bearer {token}"})
     assert models.status_code == 200
     ids = [d["id"] for d in models.json().get("data", [])]
-    assert "coding" in ids
+    assert Profile.CODING.value in ids
     assert "claude-sonnet-4-6" in ids
 
 
@@ -278,7 +280,7 @@ def test_claude_onboarding_project_creation_is_coding_only():
     models = client.get("/v1/models", headers={"Authorization": f"Bearer {token}"})
     assert models.status_code == 200
     ids = [d["id"] for d in models.json().get("data", [])]
-    assert "coding" in ids
+    assert Profile.CODING.value in ids
     assert "claude-sonnet-4-6" in ids
 
     usage = data.get("usage", [])
@@ -376,7 +378,7 @@ def test_v1_messages_anthropic_format_with_mocked_upstream(monkeypatch):
     with TestClient(main.app) as live_client:
         monkeypatch.setattr(main.state.client, "post", fake_post)
         payload = {
-            "model": "coding",
+            "model": Profile.CODING.value,
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": "hello"}],
         }
@@ -385,7 +387,7 @@ def test_v1_messages_anthropic_format_with_mocked_upstream(monkeypatch):
         data = r.json()
         assert data.get("type") == "message"
         assert data.get("role") == "assistant"
-        assert data.get("model") == "coding"
+        assert data.get("model") == Profile.CODING.value
         assert len(data.get("content", [])) > 0
         assert data["content"][0]["type"] == "text"
         assert data["content"][0]["text"] == "Hello!"
@@ -417,7 +419,7 @@ def test_v1_messages_with_system_prompt(monkeypatch):
     with TestClient(main.app) as live_client:
         monkeypatch.setattr(main.state.client, "post", fake_post)
         payload = {
-            "model": "coding",
+            "model": Profile.CODING.value,
             "max_tokens": 1024,
             "system": "You are a coding assistant.",
             "messages": [{"role": "user", "content": "write hello world"}],

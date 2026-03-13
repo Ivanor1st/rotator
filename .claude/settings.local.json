@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -c \"import main\")",
+      "Bash(curl -s http://localhost:47822/api/ping)",
+      "Bash(curl -s http://localhost:47822/api/db/status -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s -X POST http://localhost:47822/api/db/seed -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s http://localhost:47822/api/db/providers -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s http://localhost:47822/api/db/profiles -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s http://localhost:47822/api/db/models -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s http://localhost:47822/api/db/routing/coding -H \"Authorization: Bearer rotator\")",
+      "Bash(curl -s http://localhost:47822/api/db/folders -H \"Authorization: Bearer rotator\")",
+      "Bash(python -m py_compile d:/Project/rotator/router.py)",
+      "Bash(curl -s -X POST \"http://localhost:47822/api/catalogue/refresh\")",
+      "Bash(curl -s \"http://localhost:47822/api/catalogue/ollama\")",
+      "Bash(python -c \":*)",
+      "Bash(curl -s \"https://ollama.com/library/qwen3\")",
+      "Bash(curl -s -X POST \"http://localhost:47822/api/catalogue/ollama/scrape\")",
+      "Bash(curl -s \"http://localhost:47822/openapi.json\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\([p for p in d.get\\(''paths'',{}\\).keys\\(\\) if ''catalogue'' in p.lower\\(\\)]\\)\")",
+      "Bash(curl -s -X POST \"http://localhost:47822/api/restart\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); m=d.get\\(''models'',[{}]\\)[0]; print\\(''First model:'', m.get\\(''name''\\)\\); print\\(''description:'', m.get\\(''description''\\)\\); print\\(''params_summary:'', m.get\\(''params_summary''\\)\\); print\\(''vision_support:'', m.get\\(''vision_support''\\)\\); print\\(''agentic_rl:'', m.get\\(''agentic_rl''\\)\\)\")",
+      "Bash(curl -s \"http://localhost:47822/dashboard\")",
+      "Bash(curl -s http://localhost:47822/api/status)",
+      "Bash(git commit:*)",
+      "Bash(git add dashboard.html static/js/helpers.js)",
+      "Bash(tasklist)",
+      "Bash(curl -s -X POST http://localhost:47822/api/db/seed -H \"Content-Type: application/json\")",
+      "Bash(python:*)",
+      "Bash(do echo:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:127.0.0.1)",
+      "Bash(sed -n '5493,5550p' main.py)",
+      "Read(//tmp/**)"
+    ]
+  }
+}
