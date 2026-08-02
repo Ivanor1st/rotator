@@ -201,6 +201,21 @@ def test_create_project_and_coding_only_policy_models():
     assert "claude-sonnet-4-6" in ids
 
 
+def test_resolve_model_hint_tolerates_unknown_claude_alias():
+    from main import resolve_model_hint
+
+    assert resolve_model_hint("claude-sonnet-4-5") == ("profile", Profile.CODING.value)
+    assert resolve_model_hint("claude-opus-4-1") == ("profile", Profile.REASONING.value)
+    assert resolve_model_hint("claude-haiku-4-5") == ("profile", Profile.CODING.value)
+    assert resolve_model_hint("claude-totally-fake-99") == ("profile", Profile.CODING.value)
+    assert resolve_model_hint("gpt-5") == ("profile", Profile.REASONING.value)
+    assert resolve_model_hint("gpt-4o") == ("profile", Profile.CHAT.value)
+    assert resolve_model_hint("o1-mini") == ("profile", Profile.REASONING.value)
+    assert resolve_model_hint("coding") == ("profile", Profile.CODING.value)
+    assert resolve_model_hint("") is None
+    assert resolve_model_hint("nonsense-model-xyz") is None
+
+
 def test_chat_accepts_alias_model_hint_with_mocked_upstream(monkeypatch):
     class FakeResponse:
         status_code = 200

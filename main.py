@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import csv
@@ -34,7 +34,7 @@ from constants import (
     # Loaders
     DatabaseLoaders,
 )
-from db import RotatorDB
+from db import RotatorDB, _open_db
 from key_manager import KeyManager
 from notifier import send_notification, send_webhook
 from router import (
@@ -82,8 +82,31 @@ PROFILE_LABELS = ProfileDisplayNames.NAMES
 
 DEFAULT_COMPAT_ALIASES = {
     "claude-sonnet-4-6": Profile.CODING.value,
+    "claude-sonnet-4-5": Profile.CODING.value,
+    "claude-sonnet-4-5-20250929": Profile.CODING.value,
+    "claude-sonnet-4-20250514": Profile.CODING.value,
+    "claude-3-7-sonnet-20250219": Profile.CODING.value,
+    "claude-3-5-sonnet-20241022": Profile.CODING.value,
+    "claude-3-5-sonnet-20240620": Profile.CODING.value,
+    "claude-3-5-sonnet-latest": Profile.CODING.value,
+    "claude-haiku-4-5": Profile.CODING.value,
+    "claude-haiku-4-5-20251001": Profile.CODING.value,
+    "claude-3-5-haiku-20241022": Profile.CODING.value,
+    "claude-3-5-haiku-latest": Profile.CODING.value,
+    "claude-opus-4-1": Profile.REASONING.value,
+    "claude-opus-4-1-20250805": Profile.REASONING.value,
+    "claude-opus-4-20250514": Profile.REASONING.value,
+    "claude-3-opus-20240229": Profile.REASONING.value,
     "github/gpt5mini": Profile.CODING.value,
     "gpt-5-mini": Profile.CODING.value,
+    "gpt-5": Profile.REASONING.value,
+    "gpt-5-2025-08-07": Profile.REASONING.value,
+    "gpt-4o": Profile.CHAT.value,
+    "gpt-4o-mini": Profile.CHAT.value,
+    "gpt-4-turbo": Profile.CHAT.value,
+    "o1": Profile.REASONING.value,
+    "o1-mini": Profile.REASONING.value,
+    "o3-mini": Profile.REASONING.value,
 }
 
 install_status: dict[str, dict[str, Any]] = {}
@@ -158,7 +181,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="API Rotator", version="1.0.0", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
-# CORS – allow browser-based apps (Vite dev server, etc.) to call the API
+# CORS â€“ allow browser-based apps (Vite dev server, etc.) to call the API
 # ---------------------------------------------------------------------------
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -178,7 +201,7 @@ if STATIC_DIR.is_dir():
 
 
 # ---------------------------------------------------------------------------
-# Admin auth middleware – protects /api/* endpoints
+# Admin auth middleware â€“ protects /api/* endpoints
 # ---------------------------------------------------------------------------
 import base64
 from fastapi.responses import Response
@@ -635,6 +658,16 @@ def resolve_model_hint(model_hint: str) -> tuple[str, str] | None:
         return ("model", hint)
     if parse_explicit_target(hint):
         return ("explicit", hint)
+
+    lower = hint.lower()
+    if lower.startswith("claude-"):
+        return ("profile", Profile.CODING.value)
+    if lower.startswith(("gpt-", "o1", "o3", "o4")):
+        if any(t in lower for t in ("opus", "reason", "pro", "thinking")):
+            return ("profile", Profile.REASONING.value)
+        return ("profile", Profile.CHAT.value)
+    if lower.startswith("github/"):
+        return ("profile", Profile.CODING.value)
     return None
 
 
@@ -705,7 +738,7 @@ def default_presets() -> list[dict[str, Any]]:
     }
     return [
         {
-            "name": "🚀 Maximum Power",
+            "name": "ðŸš€ Maximum Power",
             "description": "MiniMax M2.5 then GLM-5 then NVIDIA",
             "data": {
                 "profiles": {
@@ -723,7 +756,7 @@ def default_presets() -> list[dict[str, Any]]:
             },
         },
         {
-            "name": "💰 Economy Mode",
+            "name": "ðŸ’° Economy Mode",
             "description": "OpenRouter free then Gemma",
             "data": {
                 "profiles": {
@@ -741,7 +774,7 @@ def default_presets() -> list[dict[str, Any]]:
             },
         },
         {
-            "name": "⚡ Speed Mode",
+            "name": "âš¡ Speed Mode",
             "description": "Step 3.5 Flash then Gemma 27B",
             "data": {
                 "profiles": {
@@ -756,7 +789,7 @@ def default_presets() -> list[dict[str, Any]]:
             },
         },
         {
-            "name": "🏠 100% Local Mode",
+            "name": "ðŸ  100% Local Mode",
             "description": "Ollama local only - uses dynamically resolved local models",
             "data": {
                 "profiles": {
@@ -771,7 +804,7 @@ def default_presets() -> list[dict[str, Any]]:
             },
         },
         {
-            "name": "💻 Intensive Coding",
+            "name": "ðŸ’» Intensive Coding",
             "description": "Coding locked to MiniMax M2.5",
             "data": {
                 "profiles": {
@@ -1096,7 +1129,7 @@ async def list_models(request: Request) -> dict[str, Any]:
             ids.append(item)
 
     alias_map = get_compat_aliases()
-    # Build model→profiles mapping from ROUTING_CHAINS
+    # Build modelâ†’profiles mapping from ROUTING_CHAINS
     model_profiles: dict[str, list[str]] = {}
     for prof, chain in ROUTING_CHAINS.items():
         for rt in chain:
@@ -1246,7 +1279,7 @@ async def _proxy_with_fallback(
                     state.last_key_by_profile[profile] = key.key_id
                     log_event(
                         profile,
-                        f"{target.provider}/{target.model} → stream started{log_suffix}",
+                        f"{target.provider}/{target.model} â†’ stream started{log_suffix}",
                         "success",
                         provider=target.provider,
                         model=target.model,
@@ -1288,7 +1321,7 @@ async def _proxy_with_fallback(
                     if rotated_from and state.config.get("settings", {}).get("notify_on_rotation", True):
                         send_notification(
                             "API Rotator",
-                            f"🔄 Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
+                            f"ðŸ”„ Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
                         )
                         dispatch_webhook(
                             "rotation",
@@ -1299,7 +1332,7 @@ async def _proxy_with_fallback(
                     if target.model == "gemini-2.5-flash":
                         used = km.daily_quota_map.get(f"google:gemini-2.5-flash:{key.key_id}", 0)
                         if used >= 18:
-                            send_notification("API Rotator", f"⚠️ gemini-2.5-flash: {used}/20 requests used today")
+                            send_notification("API Rotator", f"âš ï¸ gemini-2.5-flash: {used}/20 requests used today")
                             dispatch_webhook(
                                 "quota_warning",
                                 f"gemini-2.5-flash: {used}/20 requests used today",
@@ -1309,7 +1342,7 @@ async def _proxy_with_fallback(
                     suffix_str = f", {log_suffix.strip()}" if log_suffix.strip() else ""
                     log_event(
                         profile,
-                        f"{target.provider}/{target.model} → success ({int(elapsed_ms)}ms{suffix_str})",
+                        f"{target.provider}/{target.model} â†’ success ({int(elapsed_ms)}ms{suffix_str})",
                         "success",
                         provider=target.provider,
                         model=target.model,
@@ -1330,7 +1363,7 @@ async def _proxy_with_fallback(
                 await update_model_performance(target.model, elapsed_ms, False)
                 log_event(
                     profile,
-                    f"{target.provider}/{target.model} → error {response.status_code}{log_suffix}",
+                    f"{target.provider}/{target.model} â†’ error {response.status_code}{log_suffix}",
                     "error",
                     provider=target.provider,
                     model=target.model,
@@ -1366,7 +1399,7 @@ async def _proxy_with_fallback(
                 await update_model_performance(target.model, elapsed_ms, False)
                 log_event(
                     profile,
-                    f"{target.provider}/{target.model} → exception{log_suffix}",
+                    f"{target.provider}/{target.model} â†’ exception{log_suffix}",
                     "error",
                     provider=target.provider,
                     model=target.model,
@@ -1390,12 +1423,12 @@ async def _proxy_with_fallback(
                     )
                 # try next key for same provider
 
-        # end for keys_to_try — if none succeeded we'll continue to next candidate provider
+        # end for keys_to_try â€” if none succeeded we'll continue to next candidate provider
 
         if idx == len(candidates) - 1:
             send_notification(
                 "API Rotator",
-                f"🚨 {profile.upper()}: all cloud keys exhausted, using LOCAL",
+                f"ðŸš¨ {profile.upper()}: all cloud keys exhausted, using LOCAL",
             )
             dispatch_webhook(
                 "provider_down",
@@ -1469,7 +1502,7 @@ async def chat_completions(request: Request) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# /v1/messages — Anthropic Messages API compatibility (used by Claude Code)
+# /v1/messages â€” Anthropic Messages API compatibility (used by Claude Code)
 # ---------------------------------------------------------------------------
 
 def _anthropic_messages_to_openai(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1524,7 +1557,7 @@ def _anthropic_messages_to_openai(payload: dict[str, Any]) -> dict[str, Any]:
                     })
                 messages.append(msg_dict)
             elif tool_result_blocks:
-                # Tool results → OpenAI "tool" role messages
+                # Tool results â†’ OpenAI "tool" role messages
                 if content_text:
                     messages.append({"role": "user", "content": content_text})
                 for tr in tool_result_blocks:
@@ -1563,7 +1596,7 @@ def _anthropic_messages_to_openai(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("stop_sequences"):
         openai_payload["stop"] = payload["stop_sequences"]
 
-    # Convert Anthropic tools → OpenAI function-calling tools
+    # Convert Anthropic tools â†’ OpenAI function-calling tools
     if payload.get("tools"):
         openai_tools = []
         for tool in payload["tools"]:
@@ -1577,7 +1610,7 @@ def _anthropic_messages_to_openai(payload: dict[str, Any]) -> dict[str, Any]:
             })
         openai_payload["tools"] = openai_tools
 
-    # Convert Anthropic tool_choice → OpenAI tool_choice
+    # Convert Anthropic tool_choice â†’ OpenAI tool_choice
     tc = payload.get("tool_choice")
     if tc and isinstance(tc, dict):
         tc_type = tc.get("type", "auto")
@@ -1610,7 +1643,7 @@ def _openai_response_to_anthropic(body: dict[str, Any], requested_model: str) ->
     if content_text:
         content_blocks.append({"type": "text", "text": content_text})
 
-    # Convert OpenAI tool_calls → Anthropic tool_use content blocks
+    # Convert OpenAI tool_calls â†’ Anthropic tool_use content blocks
     for tc in tool_calls:
         func = tc.get("function", {})
         try:
@@ -1668,9 +1701,9 @@ async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id:
     current_block_type: str | None = None  # "thinking", "text", or "tool_use"
     full_text = ""
     full_thinking = ""
-    tool_args_accum: dict[int, str] = {}    # openai tc_index → accumulated arguments
+    tool_args_accum: dict[int, str] = {}    # openai tc_index â†’ accumulated arguments
     started_tool_indices: set[int] = set()  # which tc indices have had content_block_start
-    tc_block_map: dict[int, int] = {}       # openai tc_index → anthropic block_index
+    tc_block_map: dict[int, int] = {}       # openai tc_index â†’ anthropic block_index
     finish_reason_captured: str | None = None
     line_buf = ""  # SSE line buffer for partial data across raw chunks
 
@@ -1725,7 +1758,7 @@ async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id:
                     full_text += content
                     yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': block_index, 'delta': {'type': 'text_delta', 'text': content}})}\n\n"
 
-                # Handle tool calls (OpenAI delta.tool_calls → Anthropic tool_use blocks)
+                # Handle tool calls (OpenAI delta.tool_calls â†’ Anthropic tool_use blocks)
                 for tc in tool_calls_delta:
                     tc_idx = tc.get("index", 0)
                     tc_id = tc.get("id")
@@ -1734,7 +1767,7 @@ async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id:
                     tc_args = tc_func.get("arguments", "")
 
                     if tc_idx not in started_tool_indices:
-                        # New tool call — close any open block first
+                        # New tool call â€” close any open block first
                         if current_block_type is not None:
                             yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': block_index})}\n\n"
                             block_index += 1
@@ -2066,7 +2099,7 @@ async def reset_key_errors(payload: dict[str, Any] | None = None) -> dict[str, A
             await db.create_backup_snapshot(str(BACKUP_DIR))
 
     today = datetime.now(UTC).date().isoformat()
-    async with aiosqlite.connect(db.db_path) as conn:
+    async with _open_db(db.db_path) as conn:
         # clear blocked_keys app state
         await conn.execute(
             """
@@ -2204,14 +2237,14 @@ async def test_provider_key(payload: dict[str, Any]) -> dict[str, Any]:
                     params={"key": value},
                 )
                 if response.status_code == 200:
-                    return {"ok": True, "status": "ok", "message": "✅ Valid Google key"}
+                    return {"ok": True, "status": "ok", "message": "âœ… Valid Google key"}
                 if response.status_code == 429:
-                    return {"ok": False, "status": "quota", "message": "⚠️ Google quota reached"}
+                    return {"ok": False, "status": "quota", "message": "âš ï¸ Google quota reached"}
                 if response.status_code == 400:
-                    return {"ok": False, "status": "invalid", "message": "❌ Invalid key"}
+                    return {"ok": False, "status": "invalid", "message": "âŒ Invalid key"}
                 if response.status_code == 403:
-                    return {"ok": False, "status": "invalid", "message": "❌ Key revoked or missing permissions"}
-                return {"ok": False, "status": "error", "message": f"❌ Error {response.status_code}"}
+                    return {"ok": False, "status": "invalid", "message": "âŒ Key revoked or missing permissions"}
+                return {"ok": False, "status": "error", "message": f"âŒ Error {response.status_code}"}
 
             if provider == "nvidia":
                 response = await client.get(
@@ -2220,12 +2253,12 @@ async def test_provider_key(payload: dict[str, Any]) -> dict[str, Any]:
                 )
                 if response.status_code == 200:
                     count = len(response.json().get("data", []))
-                    return {"ok": True, "status": "ok", "message": f"✅ Valid NVIDIA key ({count} models)"}
+                    return {"ok": True, "status": "ok", "message": f"âœ… Valid NVIDIA key ({count} models)"}
                 if response.status_code == 429:
-                    return {"ok": False, "status": "quota", "message": "⚠️ NVIDIA quota reached"}
+                    return {"ok": False, "status": "quota", "message": "âš ï¸ NVIDIA quota reached"}
                 if response.status_code == 401:
-                    return {"ok": False, "status": "invalid", "message": "❌ Invalid NVIDIA key"}
-                return {"ok": False, "status": "error", "message": f"❌ Error {response.status_code}"}
+                    return {"ok": False, "status": "invalid", "message": "âŒ Invalid NVIDIA key"}
+                return {"ok": False, "status": "error", "message": f"âŒ Error {response.status_code}"}
 
             if provider == "openrouter":
                 response = await client.get(
@@ -2233,12 +2266,12 @@ async def test_provider_key(payload: dict[str, Any]) -> dict[str, Any]:
                     headers={"Authorization": f"Bearer {value}"},
                 )
                 if response.status_code == 200:
-                    return {"ok": True, "status": "ok", "message": "✅ Valid OpenRouter key"}
+                    return {"ok": True, "status": "ok", "message": "âœ… Valid OpenRouter key"}
                 if response.status_code == 429:
-                    return {"ok": False, "status": "quota", "message": "⚠️ OpenRouter quota reached"}
+                    return {"ok": False, "status": "quota", "message": "âš ï¸ OpenRouter quota reached"}
                 if response.status_code == 401:
-                    return {"ok": False, "status": "invalid", "message": "❌ Invalid OpenRouter key"}
-                return {"ok": False, "status": "error", "message": f"❌ Error {response.status_code}"}
+                    return {"ok": False, "status": "invalid", "message": "âŒ Invalid OpenRouter key"}
+                return {"ok": False, "status": "error", "message": f"âŒ Error {response.status_code}"}
 
             if provider == "ollama_cloud":
                 response = await client.get(
@@ -2246,19 +2279,19 @@ async def test_provider_key(payload: dict[str, Any]) -> dict[str, Any]:
                     headers={"Authorization": f"Bearer {value}"},
                 )
                 if response.status_code in (200, 404):
-                    return {"ok": True, "status": "ok", "message": "✅ Valid Ollama token"}
+                    return {"ok": True, "status": "ok", "message": "âœ… Valid Ollama token"}
                 if response.status_code == 429:
-                    return {"ok": False, "status": "quota", "message": "⚠️ Ollama Cloud quota reached"}
+                    return {"ok": False, "status": "quota", "message": "âš ï¸ Ollama Cloud quota reached"}
                 if response.status_code == 401:
-                    return {"ok": False, "status": "invalid", "message": "❌ Invalid Ollama token"}
-                return {"ok": False, "status": "warning", "message": "⚠️ Unexpected response"}
+                    return {"ok": False, "status": "invalid", "message": "âŒ Invalid Ollama token"}
+                return {"ok": False, "status": "warning", "message": "âš ï¸ Unexpected response"}
 
-            return {"ok": False, "status": "warning", "message": "⚠️ Unknown provider, test not performed"}
+            return {"ok": False, "status": "warning", "message": "âš ï¸ Unknown provider, test not performed"}
 
     except httpx.TimeoutException:
-        return {"ok": False, "status": "network", "message": "⏱ Timeout — check your connection"}
+        return {"ok": False, "status": "network", "message": "â± Timeout â€” check your connection"}
     except Exception as exc:
-        return {"ok": False, "status": "network", "message": f"❌ Network error: {str(exc)[:60]}"}
+        return {"ok": False, "status": "network", "message": f"âŒ Network error: {str(exc)[:60]}"}
 
 
 @app.post("/api/config/providers/add")
@@ -2319,13 +2352,13 @@ async def add_dynamic_provider(payload: dict[str, Any]) -> dict[str, Any]:
 
         return {
             "ok": True,
-            "message": f"✅ Provider '{provider_name}' added successfully",
+            "message": f"âœ… Provider '{provider_name}' added successfully",
             "provider": provider_name,
             "base_url": base_url
         }
 
     except Exception as exc:
-        return {"ok": False, "message": f"❌ Error: {str(exc)[:100]}"}
+        return {"ok": False, "message": f"âŒ Error: {str(exc)[:100]}"}
 
 
 @app.get("/api/projects")
@@ -2742,7 +2775,7 @@ async def update_skills_catalog(payload: dict[str, Any]):
 
 
 # ---------------------------------------------------------------------------
-# Claude Code – CLAUDE.md memory management
+# Claude Code â€“ CLAUDE.md memory management
 # ---------------------------------------------------------------------------
 
 
@@ -2792,9 +2825,9 @@ async def write_claude_memory(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "path": str(claude_md)}
 
 
-# ══════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  OPENCLAW INTEGRATION
-# ══════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _openclaw_home() -> Path:
     """Return the OpenClaw home directory."""
@@ -2901,20 +2934,20 @@ async def cp_get_status() -> str:
             active_keys += len(state.key_manager.keys_by_provider[p])
             
     return (
-        f"Statut Système :\n"
+        f"Statut SystÃ¨me :\n"
         f"- Uptime : {h}h {m}m {s}s\n"
-        f"- Requêtes totales (session) : {state.total_requests}\n"
-        f"- Clés actives : {active_keys}\n"
-        f"- Providers supportés : {', '.join(state.supported_providers)}"
+        f"- RequÃªtes totales (session) : {state.total_requests}\n"
+        f"- ClÃ©s actives : {active_keys}\n"
+        f"- Providers supportÃ©s : {', '.join(state.supported_providers)}"
     )
 
 async def cp_list_projects() -> str:
     try:
         if not state.db:
-            return "Base de données non initialisée."
+            return "Base de donnÃ©es non initialisÃ©e."
         projects = await state.db.get_all_projects()
         if not projects:
-            return "Aucun projet trouvé."
+            return "Aucun projet trouvÃ©."
         res = "Liste des Projets :\n"
         for p in projects:
             res += f"- {p['name']} (ID: {p['id']}, Policy: {p['policy']}, Limit: {p['daily_limit']})\n"
@@ -2936,13 +2969,13 @@ async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
 
     # 1. System Prompt with Tool Definitions
     system_prompt = (
-        "Tu es le Rotator Copilot. Tu as accès aux outils suivants :\n"
-        "- get_status() : Donne l'uptime, le nombre de requêtes et de clés.\n"
-        "- list_projects() : Liste les projets configurés et leurs politiques.\n"
+        "Tu es le Rotator Copilot. Tu as accÃ¨s aux outils suivants :\n"
+        "- get_status() : Donne l'uptime, le nombre de requÃªtes et de clÃ©s.\n"
+        "- list_projects() : Liste les projets configurÃ©s et leurs politiques.\n"
         "\n"
-        "Si tu as besoin d'une information pour répondre, utilise le format : [TOOL: name()]\n"
-        "Exemple: 'Je vais vérifier le statut. [TOOL: get_status()]'\n"
-        "Une fois que tu as le résultat, réponds normalement à l'utilisateur."
+        "Si tu as besoin d'une information pour rÃ©pondre, utilise le format : [TOOL: name()]\n"
+        "Exemple: 'Je vais vÃ©rifier le statut. [TOOL: get_status()]'\n"
+        "Une fois que tu as le rÃ©sultat, rÃ©ponds normalement Ã  l'utilisateur."
     )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -2953,13 +2986,13 @@ async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
     async def get_response(msgs):
         targets = choose_targets("chat")
         if not targets:
-            return None, "Aucun modèle disponible pour le chat."
+            return None, "Aucun modÃ¨le disponible pour le chat."
         
         last_err = "Inconnu"
         for target in targets:
             key_obj = state.key_manager.choose_key_for_target(target) if state.key_manager else None
             if not key_obj:
-                last_err = f"Pas de clé pour {target.provider}"
+                last_err = f"Pas de clÃ© pour {target.provider}"
                 continue
             
             headers = build_headers(target.provider, key_obj.value)
@@ -2982,7 +3015,7 @@ async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
 
     # Step 1: Initial call
     bot_text, err = await get_response(messages)
-    if err: return {"response": f"Désolé, {err}"}
+    if err: return {"response": f"DÃ©solÃ©, {err}"}
 
     # Step 2: Check for Tool Calls
     import re
@@ -2993,10 +3026,10 @@ async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
         for tool_name in tool_matches:
             if tool_name == "get_status":
                 res = await cp_get_status()
-                tool_results.append(f"Résultat de {tool_name}:\n{res}")
+                tool_results.append(f"RÃ©sultat de {tool_name}:\n{res}")
             elif tool_name == "list_projects":
                 res = await cp_list_projects()
-                tool_results.append(f"Résultat de {tool_name}:\n{res}")
+                tool_results.append(f"RÃ©sultat de {tool_name}:\n{res}")
             else:
                 tool_results.append(f"Outil {tool_name} inconnu.")
         
@@ -3005,7 +3038,7 @@ async def copilot_chat(payload: dict[str, Any]) -> dict[str, Any]:
         messages.append({"role": "system", "content": "\n\n".join(tool_results)})
         
         final_text, err = await get_response(messages)
-        if err: return {"response": f"Désolé, erreur après outil : {err}"}
+        if err: return {"response": f"DÃ©solÃ©, erreur aprÃ¨s outil : {err}"}
         
         return {
             "response": final_text,
@@ -3160,7 +3193,7 @@ async def openclaw_onboard() -> dict[str, Any]:
     try:
         subprocess.Popen(
             ["powershell", "-NoProfile", "-Command",
-             "Write-Host '🦞 OpenClaw Onboard Wizard' -ForegroundColor Cyan; openclaw onboard; Read-Host 'Appuyez sur Entrée'"],
+             "Write-Host 'ðŸ¦ž OpenClaw Onboard Wizard' -ForegroundColor Cyan; openclaw onboard; Read-Host 'Appuyez sur EntrÃ©e'"],
             creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
         )
         return {"ok": True}
@@ -3309,7 +3342,7 @@ async def openclaw_channel_login(body: dict[str, Any] = Body(...)) -> dict[str, 
     try:
         subprocess.Popen(
             ["powershell", "-NoProfile", "-Command",
-             f"Write-Host '🦞 OpenClaw — Login {channel}' -ForegroundColor Cyan; openclaw channels login --channel {channel}; Read-Host '\\nAppuyez sur Entrée'"],
+             f"Write-Host 'ðŸ¦ž OpenClaw â€” Login {channel}' -ForegroundColor Cyan; openclaw channels login --channel {channel}; Read-Host '\\nAppuyez sur EntrÃ©e'"],
             creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
         )
         return {"ok": True}
@@ -3326,7 +3359,7 @@ async def openclaw_gateway_restart() -> dict[str, Any]:
     return {"ok": False, "error": err or out}
 
 
-# ══════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 
 def _get_first_provider_key_value(provider: str) -> str | None:
@@ -3888,7 +3921,7 @@ async def catalogue_local() -> dict[str, Any]:
         models = [
             {
                 "name": item.get("name", ""),
-                "description": f"Installed local model · {item.get('details', {}).get('parameter_size', '')}",
+                "description": f"Installed local model Â· {item.get('details', {}).get('parameter_size', '')}",
                 "size": item.get("size"),
                 "parameter_size": item.get("details", {}).get("parameter_size", ""),
                 "tags": ["local"],
@@ -4977,7 +5010,7 @@ async def quota_status() -> dict[str, Any]:
         elif provider == "nvidia":
             result[provider] = [{"remaining": "rpm", "limit": km.rpm_limits.get("nvidia", 35)}]
         else:
-            result[provider] = [{"remaining": "∞"}]
+            result[provider] = [{"remaining": "âˆž"}]
     return {"items": result}
 
 
@@ -5024,7 +5057,7 @@ async def stats(period: str = "today") -> dict[str, Any]:
     else:
         cutoff = datetime.strptime(now.strftime("%Y-%m-%d"), "%Y-%m-%d")
 
-    async with aiosqlite.connect(db_path) as db:
+    async with _open_db(db_path) as db:
         cursor = await db.execute(
             "SELECT provider, profile, success, timestamp FROM profile_history WHERE timestamp >= ?",
             (cutoff.isoformat(timespec="seconds"),),
@@ -5057,7 +5090,7 @@ async def stats(period: str = "today") -> dict[str, Any]:
 async def stats_export() -> StreamingResponse:
     db_path = state.config.get("settings", {}).get("db_file", "rotator.db")
     db_path = str((BASE_DIR / db_path).resolve()) if not Path(db_path).is_absolute() else db_path
-    async with aiosqlite.connect(db_path) as db:
+    async with _open_db(db_path) as db:
         cursor = await db.execute(
             "SELECT timestamp, profile, provider, model, key_id, success FROM profile_history"
         )
@@ -5545,9 +5578,9 @@ async def dashboard() -> str:
 
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # FLUX VISUEL ENDPOINTS - Real-time state and events for flux-visuel.html
-# ═══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/flux/state")
 async def get_flux_state(project: str = "default") -> dict[str, Any]:
@@ -5576,15 +5609,15 @@ async def get_flux_state(project: str = "default") -> dict[str, Any]:
 
     # Map profiles to frontend format
     profile_emoji = {
-        "coding": "💻", "reasoning": "🧠", "chat": "💬",
-        "long": "📄", "vision": "👁️", "audio": "🎤", "translate": "🌐"
+        "coding": "ðŸ’»", "reasoning": "ðŸ§ ", "chat": "ðŸ’¬",
+        "long": "ðŸ“„", "vision": "ðŸ‘ï¸", "audio": "ðŸŽ¤", "translate": "ðŸŒ"
     }
     profiles = []
     for p in db_profiles:
         profiles.append({
             "id": p["name"],
             "name": p["name"],
-            "emoji": profile_emoji.get(p["name"], "📌"),
+            "emoji": profile_emoji.get(p["name"], "ðŸ“Œ"),
             "desc": p.get("description", p.get("display_name") or ""),
             "custom": p.get("is_custom", False)
         })
@@ -5622,7 +5655,7 @@ async def get_flux_state(project: str = "default") -> dict[str, Any]:
             if prov not in all_providers:
                 all_providers[prov] = {
                     "label": prov.replace("_", " ").title(),
-                    "emoji": "🟢" if prov in ["nvidia", "ollama_cloud"] else "🔵",
+                    "emoji": "ðŸŸ¢" if prov in ["nvidia", "ollama_cloud"] else "ðŸ”µ",
                     "status": "ok"
                 }
 
@@ -5631,8 +5664,8 @@ async def get_flux_state(project: str = "default") -> dict[str, Any]:
     # If no profiles from DB, use fallback
     if not profiles:
         profiles = [
-            {"id": "coding", "name": "coding", "emoji": "💻", "desc": "Code & développement", "custom": False},
-            {"id": "chat", "name": "chat", "emoji": "💬", "desc": "Chat général", "custom": False},
+            {"id": "coding", "name": "coding", "emoji": "ðŸ’»", "desc": "Code & dÃ©veloppement", "custom": False},
+            {"id": "chat", "name": "chat", "emoji": "ðŸ’¬", "desc": "Chat gÃ©nÃ©ral", "custom": False},
         ]
         profile_models = {
             "coding": [{"id": "cm1", "name": "llama-3.3-70b", "short": "llama-3.3-70b", "provider": "openrouter", "order": 1}],
@@ -5728,15 +5761,15 @@ async def flux_events(request: Request, project: str = "default") -> StreamingRe
 
                     # Map profiles to frontend format
                     profile_emoji = {
-                        "coding": "", "reasoning": "🧠", "chat": "💬",
-                        "long": "📄", "vision": "👁️", "audio": "🎤", "translate": "🌐"
+                        "coding": "", "reasoning": "ðŸ§ ", "chat": "ðŸ’¬",
+                        "long": "ðŸ“„", "vision": "ðŸ‘ï¸", "audio": "ðŸŽ¤", "translate": "ðŸŒ"
                     }
                     profiles = []
                     for p in db_profiles:
                         profiles.append({
                             "id": p["name"],
                             "name": p["name"],
-                            "emoji": profile_emoji.get(p["name"], "📌"),
+                            "emoji": profile_emoji.get(p["name"], "ðŸ“Œ"),
                             "desc": p.get("description", p.get("display_name") or ""),
                             "custom": p.get("is_custom", False)
                         })
@@ -5766,7 +5799,7 @@ async def flux_events(request: Request, project: str = "default") -> StreamingRe
                             if prov not in all_providers:
                                 all_providers[prov] = {
                                     "label": prov.replace("_", " ").title(),
-                                    "emoji": "🟢" if prov in ["nvidia", "ollama_cloud"] else "🔵",
+                                    "emoji": "ðŸŸ¢" if prov in ["nvidia", "ollama_cloud"] else "ðŸ”µ",
                                     "status": "ok"
                                 }
 
@@ -5828,4 +5861,7 @@ if __name__ == "__main__":
     host = config.get("settings", {}).get("host", "127.0.0.1")
     uvicorn.run("main:app", host=host, port=port, reload=False)
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+
+

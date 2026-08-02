@@ -1,6 +1,7 @@
-import asyncio
+﻿import asyncio
 import json
 import secrets
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import shutil
@@ -8,6 +9,26 @@ from typing import Any
 
 import aiosqlite
 import httpx
+
+
+@asynccontextmanager
+async def _open_db(path: str):
+    """Open a SQLite connection with WAL + busy_timeout to avoid lock errors."""
+    db = await aiosqlite.connect(path)
+    try:
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute("PRAGMA synchronous = NORMAL")
+        await db.execute("PRAGMA busy_timeout = 30000")
+        await db.execute("PRAGMA foreign_keys = ON")
+    except Exception:
+        pass
+    try:
+        yield db
+    finally:
+        try:
+            await db.close()
+        except Exception:
+            pass
 
 
 class RotatorDB:
@@ -27,7 +48,7 @@ class RotatorDB:
         return rows
 
     async def initialize(self) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS key_stats (
@@ -292,7 +313,7 @@ class RotatorDB:
 
     async def ensure_default_project_key(self) -> None:
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO project_keys (name, token, daily_limit, policy, quota_mode, active, created_at, updated_at)
@@ -317,7 +338,7 @@ class RotatorDB:
     ) -> dict[str, Any]:
         token = f"proj-{secrets.token_urlsafe(12)}"
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             cur = await db.execute(
                 """
                 INSERT INTO project_keys (name, token, daily_limit, policy, quota_mode, rate_limit, allowed_profiles, forced_provider, max_cost, active, created_at, updated_at)
@@ -342,7 +363,7 @@ class RotatorDB:
         }
 
     async def list_project_keys(self) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -371,7 +392,7 @@ class RotatorDB:
         ]
 
     async def resolve_project_key(self, token: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 """
@@ -434,7 +455,7 @@ class RotatorDB:
         return profile.lower() in allowed
 
     async def deactivate_project_key(self, project_id: int) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 "UPDATE project_keys SET active = 0, updated_at = ? WHERE id = ?",
                 (datetime.now(UTC).isoformat(timespec="seconds"), project_id),
@@ -442,7 +463,7 @@ class RotatorDB:
             await db.commit()
 
     async def delete_project_key(self, project_id: int) -> bool:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # First check if project exists
             row = await self._fetchone(
                 db,
@@ -468,7 +489,7 @@ class RotatorDB:
         forced_provider: str | None = None,
         max_cost: float | None = None,
     ) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Build update query dynamically
             updates = []
             params = []
@@ -535,7 +556,7 @@ class RotatorDB:
             }
 
     async def get_project(self, project_id: int) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT id, name, token, daily_limit, policy, quota_mode, rate_limit, allowed_profiles, forced_provider, max_cost, active, created_at, updated_at FROM project_keys WHERE id = ?",
@@ -561,7 +582,7 @@ class RotatorDB:
 
     async def get_project_by_token(self, token: str) -> dict[str, Any] | None:
         """Get project by token (or name as fallback)."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Try to find by token first, then by name
             row = await self._fetchone(
                 db,
@@ -601,7 +622,7 @@ class RotatorDB:
         now = datetime.now(UTC)
         start_date = (now - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -628,7 +649,7 @@ class RotatorDB:
         date_str: str | None = None,
     ) -> None:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT requests_used FROM project_daily_usage WHERE date = ? AND project_token = ?",
@@ -655,7 +676,7 @@ class RotatorDB:
 
     async def get_project_daily_usage(self, project_token: str, date_str: str | None = None) -> int:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT requests_used FROM project_daily_usage WHERE date = ? AND project_token = ?",
@@ -665,7 +686,7 @@ class RotatorDB:
 
     async def list_projects_usage_today(self, date_str: str | None = None) -> list[dict[str, Any]]:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -700,7 +721,7 @@ class RotatorDB:
         response_ms: float,
         tokens: int = 0,
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT requests, errors, tokens, avg_response_ms FROM key_stats WHERE key_id = ?",
@@ -732,7 +753,7 @@ class RotatorDB:
 
     async def get_all_key_stats(self) -> dict[str, dict[str, Any]]:
         """Get all key statistics as a dictionary keyed by key_id."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(db, "SELECT key_id, provider, requests, errors, tokens, avg_response_ms FROM key_stats")
         result = {}
         for key_id, provider, requests, errors, tokens, avg_response_ms in rows:
@@ -768,7 +789,7 @@ class RotatorDB:
         date_str: str | None = None,
     ) -> None:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 """
@@ -798,7 +819,7 @@ class RotatorDB:
 
     async def load_daily_quota_map(self, date_str: str | None = None) -> dict[str, int]:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 "SELECT provider, model, key_id, requests_used FROM daily_quotas WHERE date = ?",
@@ -817,7 +838,7 @@ class RotatorDB:
         key_id: str | None,
         success: bool,
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO profile_history (timestamp, profile, provider, model, key_id, success)
@@ -836,7 +857,7 @@ class RotatorDB:
 
     async def get_profile_requests_today(self, date_str: str | None = None) -> dict[str, int]:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -855,7 +876,7 @@ class RotatorDB:
         provider: str | None = None,
     ) -> list[dict]:
         """Return recent profile_history rows for the Sessions tab."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             conditions = []
             params: list = []
             if profile:
@@ -891,7 +912,7 @@ class RotatorDB:
 
     async def reset_daily_quotas(self, date_str: str | None = None) -> None:
         target_date = date_str or datetime.now(UTC).strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM daily_quotas WHERE date = ?", (target_date,))
             await db.commit()
 
@@ -901,7 +922,7 @@ class RotatorDB:
         forced_provider: str | None,
         blocked_providers: list[str],
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO override_state (profile, forced_provider, blocked_providers)
@@ -915,7 +936,7 @@ class RotatorDB:
             await db.commit()
 
     async def load_overrides(self) -> dict[str, Any]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 "SELECT profile, forced_provider, blocked_providers FROM override_state"
@@ -930,7 +951,7 @@ class RotatorDB:
         return data
 
     async def set_app_state(self, key: str, value: Any) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO app_state (key, value)
@@ -943,14 +964,14 @@ class RotatorDB:
             await db.commit()
 
     async def get_app_state(self, key: str, default: Any = None) -> Any:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(db, "SELECT value FROM app_state WHERE key = ?", (key,))
         if not row:
             return default
         return json.loads(row[0])
 
     async def save_model_lock(self, profile: str, model: str, provider: str) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO model_locks (profile, model, provider, created_at)
@@ -965,17 +986,17 @@ class RotatorDB:
             await db.commit()
 
     async def delete_model_lock(self, profile: str) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM model_locks WHERE profile = ?", (profile,))
             await db.commit()
 
     async def load_model_locks(self) -> dict[str, dict[str, str]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(db, "SELECT profile, model, provider FROM model_locks")
         return {profile: {"model": model, "provider": provider} for profile, model, provider in rows}
 
     async def save_suspension(self, provider: str, until_ts: str | None) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO suspensions (provider, until_ts, created_at)
@@ -988,17 +1009,17 @@ class RotatorDB:
             await db.commit()
 
     async def delete_suspension(self, provider: str) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM suspensions WHERE provider = ?", (provider,))
             await db.commit()
 
     async def load_suspensions(self) -> dict[str, str | None]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(db, "SELECT provider, until_ts FROM suspensions")
         return {provider: until_ts for provider, until_ts in rows}
 
     async def list_presets(self) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 "SELECT id, name, description, data_json, created_at, updated_at FROM presets ORDER BY id"
@@ -1019,7 +1040,7 @@ class RotatorDB:
 
     async def save_preset(self, name: str, description: str, data: dict[str, Any], preset_id: int | None = None) -> int:
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             if preset_id is None:
                 cur = await db.execute(
                     """
@@ -1042,12 +1063,12 @@ class RotatorDB:
             return preset_id
 
     async def delete_preset(self, preset_id: int) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM presets WHERE id = ?", (preset_id,))
             await db.commit()
 
     async def list_schedules(self) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -1072,7 +1093,7 @@ class RotatorDB:
         ]
 
     async def save_schedule(self, data: dict[str, Any], schedule_id: int | None = None) -> int:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             if schedule_id is None:
                 cur = await db.execute(
                     """
@@ -1114,7 +1135,7 @@ class RotatorDB:
             return schedule_id
 
     async def delete_schedule(self, schedule_id: int) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
             await db.commit()
 
@@ -1125,7 +1146,7 @@ class RotatorDB:
         model_b: str,
         winner: str,
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO model_votes (timestamp, profile, model_a, model_b, winner)
@@ -1144,7 +1165,7 @@ class RotatorDB:
         error_rate: float,
         sample_count: int,
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO model_performance (date, model, avg_ttft_ms, avg_total_ms, error_rate, sample_count)
@@ -1160,7 +1181,7 @@ class RotatorDB:
             await db.commit()
 
     async def list_model_performance(self, date_str: str) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 "SELECT model, avg_ttft_ms, avg_total_ms, error_rate, sample_count FROM model_performance WHERE date = ?",
@@ -1226,7 +1247,7 @@ class RotatorDB:
             "project_daily_usage",
             "project_keys",
         ]
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             for table in tables:
                 await db.execute(f"DELETE FROM {table}")  # SAFETY: table names from hardcoded internal list, no user input
             await db.commit()
@@ -1246,7 +1267,7 @@ class RotatorDB:
             ("project_daily_usage", "date"),
         ]
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             for table, field_expr in targets:
                 await db.execute(f"DELETE FROM {table} WHERE {field_expr} < ?", (date_cutoff,))  # SAFETY: table/field names from hardcoded internal list, no user input
                 row = await self._fetchone(db, "SELECT changes()")
@@ -1306,7 +1327,7 @@ class RotatorDB:
             ("custom", "Custom", "", 80),
         ]
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             for name, display_name, base_url, priority in providers_data:
                 await db.execute(
                     """
@@ -1331,7 +1352,7 @@ class RotatorDB:
             ("translate", "Translate", "Translation"),
         ]
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             for name, display_name, description in profiles_data:
                 await db.execute(
                     """
@@ -1350,12 +1371,13 @@ class RotatorDB:
         default_routing = {
             "coding": [
                 # Ollama Cloud - best for coding
-                ("ollama_cloud", "minimax-m2.5:cloud", 1),
+                ("ollama_cloud", "minimax-m2.7:cloud", 1),
                 ("ollama_cloud", "qwen3-coder-next:cloud", 2),
                 # NVIDIA - top coding models
                 ("nvidia", "qwen/qwen3-coder-480b-a35b-instruct", 3),
                 ("nvidia", "z-ai/glm5", 4),
-                # OpenRouter - best free coding models (Qwen3 Coder is 7/7!)
+                # OpenRouter - best free coding models
+                ("openrouter", "minimax/minimax-m2.5:free", 4),  # 196K context
                 ("openrouter", "qwen/qwen3-coder:free", 5),
                 ("openrouter", "openai/gpt-oss-120b:free", 6),
                 ("openrouter", "deepseek/deepseek-r1-0528:free", 7),
@@ -1367,12 +1389,13 @@ class RotatorDB:
             "reasoning": [
                 # Ollama Cloud - best reasoning
                 ("ollama_cloud", "glm-5:cloud", 1),
-                ("ollama_cloud", "minimax-m2.5:cloud", 2),
+                ("ollama_cloud", "minimax-m2.7:cloud", 2),
                 # NVIDIA - top reasoning models
                 ("nvidia", "qwen/qwen3-next-80b-a3b-thinking", 3),
                 ("nvidia", "deepseek-ai/deepseek-v3.2", 4),
                 ("nvidia", "openai/gpt-oss-120b", 5),
-                # OpenRouter - best free reasoning models (DeepSeek R1 is 7/7!)
+                # OpenRouter - best free reasoning models
+                ("openrouter", "minimax/minimax-m2.5:free", 5),  # 196K context
                 ("openrouter", "deepseek/deepseek-r1-0528:free", 6),
                 ("openrouter", "qwen/qwen3-vl-235b-a22b-thinking", 7),
                 ("openrouter", "qwen/qwen3-next-80b-a3b-instruct:free", 8),
@@ -1385,11 +1408,12 @@ class RotatorDB:
             "chat": [
                 # Ollama Cloud - best chat models
                 ("ollama_cloud", "glm-5:cloud", 1),
-                ("ollama_cloud", "minimax-m2.5:cloud", 2),
+                ("ollama_cloud", "minimax-m2.7:cloud", 2),
                 ("ollama_cloud", "qwen3.5:397b-cloud", 3),
                 # NVIDIA
-                ("nvidia", "minimaxai/minimax-m2.1", 4),
+                ("nvidia", "minimaxai/minimax-m2.5", 4),
                 # OpenRouter - best free chat models (Trinity is 7/7, Dolphin is 7/7!)
+                ("openrouter", "minimax/minimax-m2.5:free", 4),  # 196K context
                 ("openrouter", "arcee-ai/trinity-large-preview:free", 5),
                 ("openrouter", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free", 6),
                 ("openrouter", "google/gemma-3-27b-it:free", 7),
@@ -1411,6 +1435,7 @@ class RotatorDB:
                 ("nvidia", "deepseek-ai/deepseek-v3.2", 6),  # 256K
                 ("nvidia", "meta/llama-4-maverick-17b-128e-instruct", 7),
                 # OpenRouter - free options
+                ("openrouter", "minimax/minimax-m2.5:free", 7),  # 196K
                 ("openrouter", "qwen/qwen3-next-80b-a3b-instruct:free", 8),  # 262K
                 ("openrouter", "stepfun/step-3.5-flash:free", 9),  # 256K
                 # Google - best free tier
@@ -1443,7 +1468,7 @@ class RotatorDB:
             ],
         }
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # First, get provider IDs
             provider_map = {}
             rows = await self._fetchall(db, "SELECT id, name FROM providers")
@@ -1521,7 +1546,7 @@ class RotatorDB:
         if not ollama_models:
             return {"message": "No models found in Ollama"}
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Get local provider ID
             provider_row = await self._fetchone(
                 db,
@@ -1612,7 +1637,7 @@ class RotatorDB:
         # Default Ollama folder on Windows
         default_folder = os.path.join(os.environ.get("USERPROFILE", ""), ".ollama", "models")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 """
                 INSERT OR IGNORE INTO model_folders (path, is_active, scan_on_start, created_at)
@@ -1633,7 +1658,7 @@ class RotatorDB:
         ollama_result = await self.scan_and_seed_ollama_models()
 
         # Return counts
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             providers_count = await self._fetchone(db, "SELECT COUNT(*) FROM providers")
             profiles_count = await self._fetchone(db, "SELECT COUNT(*) FROM profiles")
             models_count = await self._fetchone(db, "SELECT COUNT(*) FROM models")
@@ -1650,7 +1675,7 @@ class RotatorDB:
 
     async def is_db_seeded(self) -> bool:
         """Check if the database has been seeded with initial data."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             providers = await self._fetchone(db, "SELECT COUNT(*) FROM providers")
             profiles = await self._fetchone(db, "SELECT COUNT(*) FROM profiles")
 
@@ -1661,7 +1686,7 @@ class RotatorDB:
     # =================================================================
 
     async def list_providers(self, active_only: bool = True) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             query = "SELECT id, name, display_name, base_url, is_active, priority, created_at FROM providers"
             if active_only:
                 query += " WHERE is_active = 1"
@@ -1683,7 +1708,7 @@ class RotatorDB:
         ]
 
     async def get_provider_by_name(self, name: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT id, name, display_name, base_url, is_active, priority, created_at FROM providers WHERE name = ?",
@@ -1704,7 +1729,7 @@ class RotatorDB:
         }
 
     async def get_provider_by_id(self, provider_id: int) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT id, name, display_name, base_url, is_active, priority, created_at FROM providers WHERE id = ?",
@@ -1732,7 +1757,7 @@ class RotatorDB:
         priority: int = 50,
     ) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             cur = await db.execute(
                 """
                 INSERT INTO providers (name, display_name, base_url, is_active, priority, created_at)
@@ -1755,7 +1780,7 @@ class RotatorDB:
 
     async def update_provider(self, provider_id: int, data: dict[str, Any]) -> dict[str, Any] | None:
         """Update provider. Only custom providers can be updated."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Check if provider exists and is custom
             row = await self._fetchone(db, "SELECT name FROM providers WHERE id = ?", (provider_id,))
             if not row:
@@ -1789,7 +1814,7 @@ class RotatorDB:
 
     async def delete_provider(self, provider_id: int) -> bool:
         """Delete a provider. Only custom providers can be deleted."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Check if provider is custom (not in default list)
             row = await self._fetchone(db, "SELECT name FROM providers WHERE id = ?", (provider_id,))
             if not row:
@@ -1810,7 +1835,7 @@ class RotatorDB:
     # =================================================================
 
     async def list_profiles(self, active_only: bool = True) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             query = "SELECT id, name, display_name, description, is_active, is_custom, created_at FROM profiles"
             if active_only:
                 query += " WHERE is_active = 1"
@@ -1832,7 +1857,7 @@ class RotatorDB:
         ]
 
     async def get_profile_by_name(self, name: str) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT id, name, display_name, description, is_active, created_at FROM profiles WHERE name = ?",
@@ -1852,7 +1877,7 @@ class RotatorDB:
         }
 
     async def get_profile_by_id(self, profile_id: int) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 "SELECT id, name, display_name, description, is_active, is_custom, created_at FROM profiles WHERE id = ?",
@@ -1874,7 +1899,7 @@ class RotatorDB:
 
     async def migrate_add_is_custom_column(self) -> None:
         """Add is_custom column to profiles table if it doesn't exist."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Check if column exists
             rows = await self._fetchall(db, "PRAGMA table_info(profiles)")
             columns = [r[1] for r in rows] if rows else []
@@ -1887,7 +1912,7 @@ class RotatorDB:
         from datetime import datetime
         now = datetime.now(UTC).isoformat(timespec="seconds")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Insert profile
             cur = await db.execute(
                 """
@@ -1949,7 +1974,7 @@ class RotatorDB:
 
     async def get_custom_profiles(self) -> list[dict[str, Any]]:
         """Get all custom profiles from the database."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 "SELECT id, name, display_name, description, is_active, created_at FROM profiles WHERE is_custom = 1 ORDER BY id ASC",
@@ -1979,7 +2004,7 @@ class RotatorDB:
 
     async def delete_custom_profile(self, name: str) -> bool:
         """Delete a custom profile from the database."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Get profile ID
             profile_row = await self._fetchone(
                 db,
@@ -2009,7 +2034,7 @@ class RotatorDB:
 
     async def get_profile_routing_chain(self, profile_name: str) -> list[dict[str, Any]]:
         """Get the routing chain for a profile, ordered by order_index."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             rows = await self._fetchall(
                 db,
                 """
@@ -2041,7 +2066,7 @@ class RotatorDB:
     # =================================================================
 
     async def list_models(self, provider_id: int | None = None) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             query = """
                 SELECT m.id, m.provider_id, p.name as provider_name, m.name, m.display_name,
                        m.context_window, m.supports_vision, m.supports_audio, m.is_custom,
@@ -2075,7 +2100,7 @@ class RotatorDB:
         ]
 
     async def get_model_by_id(self, model_id: int) -> dict[str, Any] | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             row = await self._fetchone(
                 db,
                 """
@@ -2118,7 +2143,7 @@ class RotatorDB:
         supports_audio: bool = False,
     ) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             cur = await db.execute(
                 """
                 INSERT INTO models (provider_id, name, display_name, is_custom, context_window, supports_vision, supports_audio, exists_on_disk, created_at)
@@ -2140,7 +2165,7 @@ class RotatorDB:
         """Add a model to a profile's routing chain."""
         now = datetime.now(UTC).isoformat(timespec="seconds")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Get max order_index if not specified
             if order_index is None:
                 row = await self._fetchone(
@@ -2176,7 +2201,7 @@ class RotatorDB:
 
     async def suspend_model_in_profile(self, model_id: int, profile_id: int, suspended: bool = True) -> bool:
         """Suspend or unsuspend a model in a specific profile."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute(
                 "UPDATE model_routing SET is_suspended = ? WHERE model_id = ? AND profile_id = ?",
                 (1 if suspended else 0, model_id, profile_id),
@@ -2187,7 +2212,7 @@ class RotatorDB:
 
     async def remove_model_from_profile(self, model_id: int, profile_id: int) -> bool:
         """Remove a model from a profile's routing chain. Only non-default models can be removed."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Check if it's a default model
             row = await self._fetchone(
                 db,
@@ -2211,7 +2236,7 @@ class RotatorDB:
 
     async def delete_model(self, model_id: int) -> bool:
         """Delete a model. Only custom models can be deleted."""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Check if model is custom
             row = await self._fetchone(db, "SELECT is_custom FROM models WHERE id = ?", (model_id,))
             if not row or row[0] != 1:
@@ -2229,7 +2254,7 @@ class RotatorDB:
         """Reorder models in a profile. Only non-default models can be reordered."""
         now = datetime.now(UTC).isoformat(timespec="seconds")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             for idx, model_id in enumerate(model_ids, 1):
                 # Check if this model is default
                 row = await self._fetchone(
@@ -2258,7 +2283,7 @@ class RotatorDB:
     # =================================================================
 
     async def list_model_folders(self, active_only: bool = True) -> list[dict[str, Any]]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             query = "SELECT id, path, is_active, scan_on_start, last_scanned, created_at FROM model_folders"
             if active_only:
                 query += " WHERE is_active = 1"
@@ -2280,7 +2305,7 @@ class RotatorDB:
 
     async def create_model_folder(self, path: str, scan_on_start: bool = True) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             cur = await db.execute(
                 """
                 INSERT INTO model_folders (path, is_active, scan_on_start, created_at)
@@ -2301,7 +2326,7 @@ class RotatorDB:
         }
 
     async def delete_model_folder(self, folder_id: int) -> bool:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             await db.execute("DELETE FROM model_folders WHERE id = ?", (folder_id,))
             await db.commit()
 
@@ -2311,7 +2336,7 @@ class RotatorDB:
         """Scan a model folder for local models and add them to the database."""
         import os
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Get folder path
             row = await self._fetchone(db, "SELECT path FROM model_folders WHERE id = ?", (folder_id,))
             if not row:
@@ -2377,7 +2402,7 @@ class RotatorDB:
         validated = {"valid": 0, "invalid": 0, "errors": []}
         now = datetime.now(UTC).isoformat(timespec="seconds")
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with _open_db(self.db_path) as db:
             # Get all local models with their folders
             rows = await self._fetchall(
                 db,
@@ -2416,3 +2441,5 @@ class RotatorDB:
             await db.commit()
 
         return validated
+
+
