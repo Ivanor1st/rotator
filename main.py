@@ -178,7 +178,7 @@ async def lifespan(_: FastAPI):
         await state.client.aclose()
 
 
-app = FastAPI(title="API Rotator", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="API Rotator", version="1.1.0", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
 # CORS â€“ allow browser-based apps (Vite dev server, etc.) to call the API
