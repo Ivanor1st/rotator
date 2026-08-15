@@ -33,107 +33,83 @@ class RouteTarget:
 # Default routing chains (fallback when DB is not available)
 ROUTING_CHAINS: dict[str, list[RouteTarget]] = {
     Profile.CODING.value: [
-        # Ollama Cloud - best for coding
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m2.5:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3-coder-next:cloud", "shared"),
-        # NVIDIA - top coding models
-        RouteTarget(Provider.NVIDIA.value, "qwen/qwen3-coder-480b-a35b-instruct", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "z-ai/glm5", "35/40 rpm"),
-        # OpenRouter - best free coding models (Qwen3 Coder is 7/7!)
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-coder:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "openai/gpt-oss-120b:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "deepseek/deepseek-r1-0528:free", "free"),
-        # Google
-        RouteTarget(Provider.GOOGLE.value, "gemma-3-27b-it", "14000/14400 day"),
+        # Ollama Cloud - free tier
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:120b:cloud", "shared"),
+        # NVIDIA - free tier
+        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m3", "35/40 rpm"),
+        RouteTarget(Provider.NVIDIA.value, "z-ai/glm-5.2", "35/40 rpm"),
+        # OpenRouter - free models
+        RouteTarget(Provider.OPENROUTER.value, "cohere/north-mini-code:free", "free"),
+        RouteTarget(Provider.OPENROUTER.value, "openai/gpt-oss-20b:free", "free"),
+        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.REASONING.value: [
-        # Ollama Cloud - best reasoning
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "glm-5:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m2.5:cloud", "shared"),
-        # NVIDIA - top reasoning models
-        RouteTarget(Provider.NVIDIA.value, "qwen/qwen3-next-80b-a3b-thinking", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v3.2", "35/40 rpm"),
+        # Ollama Cloud - free tier
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "nemotron-3-super:cloud", "shared"),
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
+        # NVIDIA - free tier
+        RouteTarget(Provider.NVIDIA.value, "z-ai/glm-5.2", "35/40 rpm"),
+        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v4-flash-0731", "35/40 rpm"),
         RouteTarget(Provider.NVIDIA.value, "openai/gpt-oss-120b", "35/40 rpm"),
-        # OpenRouter - best free reasoning models (DeepSeek R1 is 7/7!)
-        RouteTarget(Provider.OPENROUTER.value, "deepseek/deepseek-r1-0528:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-vl-235b-a22b-thinking", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-next-80b-a3b-instruct:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "nousresearch/hermes-3-llama-3.1-405b:free", "free"),
-        # Google
-        RouteTarget(Provider.GOOGLE.value, "gemma-3-27b-it", "14000/14400 day"),
+        # OpenRouter - free models
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "free"),
+        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.CHAT.value: [
-        # Ollama Cloud - best chat models
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "glm-5:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m2.5:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3.5:397b-cloud", "shared"),
-        # NVIDIA
-        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m2.1", "35/40 rpm"),
-        # OpenRouter - best free chat models (Trinity is 7/7, Dolphin is 7/7!)
-        RouteTarget(Provider.OPENROUTER.value, "arcee-ai/trinity-large-preview:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "cognitivecomputations/dolphin-mistral-24b-venice-edition:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "google/gemma-3-27b-it:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "meta-llama/llama-3.3-70b-instruct:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "mistralai/mistral-small-3.1-24b-instruct:free", "free"),
-        # Google
-        RouteTarget(Provider.GOOGLE.value, "gemma-3-27b-it", "14000/14400 day"),
+        # Ollama Cloud - free tier
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:20b:cloud", "shared"),
+        # NVIDIA - free tier
+        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m3", "35/40 rpm"),
+        # OpenRouter - free models
+        RouteTarget(Provider.OPENROUTER.value, "openai/gpt-oss-20b:free", "free"),
+        RouteTarget(Provider.OPENROUTER.value, "google/gemma-4-31b-it:free", "free"),
+        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.LONG.value: [
-        # Ollama Cloud - best long context (ONLY models with cloud variants!)
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3-next:80b-cloud", "shared"),  # Has cloud variant!
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3.5:397b-cloud", "shared"),  # 256K context
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "kimi-k2.5:cloud", "shared"),  # Large context
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "deepseek-v3.2:cloud", "shared"),  # DeepSeek flagship
-        # NVIDIA - excellent long context
-        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-nano-30b-a3b", "35/40 rpm"),  # 1M context!
-        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v3.2", "35/40 rpm"),  # 256K
-        RouteTarget(Provider.NVIDIA.value, "meta/llama-4-maverick-17b-128e-instruct", "35/40 rpm"),
-        # OpenRouter - free options
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-next-80b-a3b-instruct:free", "free"),  # 262K
-        RouteTarget(Provider.OPENROUTER.value, "stepfun/step-3.5-flash:free", "free"),  # 256K
-        # Google - best free tier
-        RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),  # 1M!
+        # Ollama Cloud - free tier
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "nemotron-3-super:cloud", "shared"),
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:120b:cloud", "shared"),
+        # NVIDIA - free tier
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-nano-30b-a3b", "35/40 rpm"),
+        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v4-flash-0731", "35/40 rpm"),
+        # OpenRouter - free models
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
+        # Google - 1M context, free tier
+        RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
     Profile.VISION.value: [
-        # Ollama Cloud - ONLY models with cloud variants!
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3-vl:235b-cloud", "shared"),  # Best VLM, 235B!
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "kimi-k2.5:cloud", "shared"),  # Native multimodal agentic
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma3:27b-cloud", "shared"),  # Google's flagship
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "qwen3.5:397b-cloud", "shared"),  # Best overall?
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "mistral-large-3:675b-cloud", "shared"),  # Mistral flagship
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "ministral-3:14b-cloud", "shared"),  # Good smaller option
-        # OpenRouter - free vision (best scoring!)
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-vl-235b-a22b-thinking", "free"),  # 7/7 vision!
-        RouteTarget(Provider.OPENROUTER.value, "qwen/qwen3-vl-30b-a3b-thinking", "free"),
-        # NVIDIA
-        RouteTarget(Provider.NVIDIA.value, "moonshotai/kimi-k2.5", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "meta/llama-3.2-90b-vision-instruct", "35/40 rpm"),
-        # Google - free option
+        # Ollama Cloud - free tier, Gemma 4 is multimodal
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
+        # NVIDIA - free tier
+        RouteTarget(Provider.NVIDIA.value, "meta/llama-3.2-11b-vision-instruct", "35/40 rpm"),
+        # OpenRouter - free vision model
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-nano-12b-v2-vl:free", "free"),
+        # Google - free tier, multimodal
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.AUDIO.value: [
-        # Google - unlimited audio
-        RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash-native-audio", "unlimited"),
-        # NVIDIA
-        RouteTarget(Provider.NVIDIA.value, "microsoft/phi-4-multimodal-instruct", "35/40 rpm"),
+        # Google - free tier, multimodal (audio file understanding via generateContent)
+        RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
     Profile.TRANSLATE.value: [
-        # Ollama Cloud - translate specialist (ONLY models with cloud variants!)
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "glm-5:cloud", "shared"),  # Google's best!
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma3:27b-cloud", "shared"),  # Google flagship
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "mistral-large-3:675b-cloud", "shared"),  # Mistral flagship
-        # NVIDIA
-        RouteTarget(Provider.NVIDIA.value, "nvidia/riva-translate-4b-instruct-v1.1", "35/40 rpm"),  # 12 lang
-        # OpenRouter - free options
-        RouteTarget(Provider.OPENROUTER.value, "google/gemma-3-27b-it:free", "free"),
-        # Google
+        # Ollama Cloud - free tier, multilingual
+        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
+        # NVIDIA - translate specialist, free tier
+        RouteTarget(Provider.NVIDIA.value, "nvidia/riva-translate-4b-instruct-v2", "35/40 rpm"),
+        # OpenRouter - free model
+        RouteTarget(Provider.OPENROUTER.value, "google/gemma-4-31b-it:free", "free"),
+        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
 }
@@ -211,48 +187,35 @@ def invalidate_routing_cache() -> None:
 
 MODEL_CATALOG: dict[str, list[dict[str, str]]] = {
     Provider.OLLAMA_CLOUD.value: [
-        {"model": "minimax-m2.5:cloud", "context": "198K", "emoji": "☁️"},
-        {"model": "qwen3.5:397b-cloud", "context": "256K", "emoji": "☁️"},
-        {"model": "qwen3.5:397b-cloud", "context": "256K", "emoji": "☁️"},
-        {"model": "glm-5:cloud", "context": "198K", "emoji": "☁️"},
-        {"model": "qwen3-coder-next:cloud", "context": "256K", "emoji": "☁️"},
-        {"model": "kimi-k2.5:cloud", "context": "256K", "emoji": "☁️"},
+        # Verified free-tier models only (checked 2026-08-15; rest require an Ollama subscription)
+        {"model": "minimax-m3:cloud", "context": "198K", "emoji": "☁️"},
+        {"model": "gemma4:31b:cloud", "context": "128K", "emoji": "☁️"},
+        {"model": "gpt-oss:120b:cloud", "context": "131K", "emoji": "☁️"},
+        {"model": "gpt-oss:20b:cloud", "context": "131K", "emoji": "☁️"},
+        {"model": "nemotron-3-super:cloud", "context": "256K", "emoji": "☁️"},
+        {"model": "nemotron-3-nano:30b:cloud", "context": "256K", "emoji": "☁️"},
     ],
     Provider.NVIDIA.value: [
-        # Top tier - 7/7 in category
+        # Verified working models only (checked 2026-08-15)
         {"model": "openai/gpt-oss-120b", "context": "131K", "emoji": "💻🧠💬"},
-        {"model": "qwen/qwen3-235b-a22b", "context": "131K", "emoji": "🧠💻🌍"},
-        {"model": "minimaxai/minimax-m2.1", "context": "200K", "emoji": "💬📄"},
-        {"model": "qwen/qwen3.5-397b-a17b", "context": "32K", "emoji": "🧠💬🌍"},
-        {"model": "mistralai/mistral-large-3-675b-instruct-2512", "context": "32K", "emoji": "💻"},
-        {"model": "moonshotai/kimi-k2-instruct", "context": "32K", "emoji": "💻"},
-        # Good tier
-        {"model": "deepseek-ai/deepseek-v3.2", "context": "32K", "emoji": "💻🧠"},
-        {"model": "qwen/qwen3-coder-480b-a35b-instruct", "context": "32K", "emoji": "💻"},
-        {"model": "mistralai/devstral-2-123b-instruct-2512", "context": "32K", "emoji": "💻"},
-        {"model": "qwen/qwen3-next-80b-a3b-thinking", "context": "32K", "emoji": "🧠"},
-        {"model": "meta/llama-4-maverick-17b-128e-instruct", "context": "128K", "emoji": "💬📄👁️"},
-        {"model": "meta/llama-3.2-90b-vision-instruct", "context": "128K", "emoji": "👁️"},
+        {"model": "minimaxai/minimax-m3", "context": "200K", "emoji": "💬📄"},
+        {"model": "z-ai/glm-5.2", "context": "128K", "emoji": "💻🧠"},
+        {"model": "deepseek-ai/deepseek-v4-flash-0731", "context": "128K", "emoji": "💻🧠"},
         {"model": "nvidia/nemotron-3-nano-30b-a3b", "context": "256K", "emoji": "📄"},
-        {"model": "microsoft/phi-4-multimodal-instruct", "context": "32K", "emoji": "👁️🎵"},
-        {"model": "nvidia/riva-translate-4b-instruct-v1.1", "context": "4K", "emoji": "🌍"},
+        {"model": "meta/llama-3.2-11b-vision-instruct", "context": "128K", "emoji": "👁️"},
+        {"model": "nvidia/riva-translate-4b-instruct-v2", "context": "4K", "emoji": "🌍"},
     ],
     Provider.OPENROUTER.value: [
-        {"model": "qwen/qwen3-vl-235b-a22b-thinking", "context": "262K", "emoji": "👁️"},
-        {"model": "deepseek/deepseek-r1-0528:free", "context": "163K", "emoji": "🧠"},
-        {"model": "qwen/qwen3-next-80b-a3b-instruct:free", "context": "262K", "emoji": "📄"},
-        {"model": "qwen/qwen3-coder:free", "context": "262K", "emoji": "💻"},
-        {"model": "meta-llama/llama-3.3-70b-instruct:free", "context": "128K", "emoji": "💬"},
-        {"model": "arcee-ai/trinity-large-preview:free", "context": "131K", "emoji": "💬"},
-        {"model": "mistralai/mistral-small-3.1-24b-instruct:free", "context": "128K", "emoji": "💬"},
-        {"model": "google/gemma-3-27b-it:free", "context": "131K", "emoji": "🧭"},
-        {"model": "nousresearch/hermes-3-llama-3.1-405b:free", "context": "131K", "emoji": "🧭"},
+        # Verified free (":free" suffix, $0 pricing, checked 2026-08-15)
+        {"model": "openai/gpt-oss-20b:free", "context": "131K", "emoji": "💻🧠💬"},
+        {"model": "cohere/north-mini-code:free", "context": "32K", "emoji": "💻"},
+        {"model": "google/gemma-4-31b-it:free", "context": "128K", "emoji": "💬🌍"},
+        {"model": "nvidia/nemotron-3-ultra-550b-a55b:free", "context": "128K", "emoji": "🧠"},
+        {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "context": "128K", "emoji": "🧠"},
+        {"model": "nvidia/nemotron-nano-12b-v2-vl:free", "context": "128K", "emoji": "👁️"},
     ],
     Provider.GOOGLE.value: [
-        {"model": "gemma-3-27b-it", "context": "?", "emoji": "🟡"},
-        {"model": "gemma-3-12b-it", "context": "?", "emoji": "🟡"},
         {"model": "gemini-2.5-flash", "context": "1M", "emoji": "🟡"},
-        {"model": "gemini-2.5-flash-native-audio", "context": "audio", "emoji": "🟡"},
     ],
     Provider.LOCAL.value: [
         {"model": "qwen3-coder-next:latest", "context": "?", "emoji": "🏠"},
