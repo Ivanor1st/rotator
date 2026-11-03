@@ -401,6 +401,13 @@ class ConfigSchema:
         invalid_token_block_seconds: int = Defaults.DEFAULT_INVALID_TOKEN_BLOCK_SECONDS
         notify_on_rotation: bool = True
         dashboard_language: str = "fr"
+        retry_attempts: Dict[str, int] = field(default_factory=lambda: {
+            "nvidia": 3,
+            "ollama_cloud": 2,
+            "openrouter": 1,
+            "google": 1,
+        })
+        retry_delay: float = 2.0
 
         @dataclass
         class Backups:

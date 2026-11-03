@@ -18,9 +18,10 @@ class KeyRecord:
 
 
 class KeyManager:
-    def __init__(self, config: dict, daily_quota_map: dict[str, int]) -> None:
+    def __init__(self, config: dict, daily_quota_map: dict[str, int], db: Any | None = None) -> None:
         self.config = config
         self.daily_quota_map = daily_quota_map
+        self._db: Any | None = None
 
         def resolve_secret(value: str) -> str:
             raw = str(value or "").strip()
@@ -39,6 +40,18 @@ class KeyManager:
             Provider.OPENROUTER.value: 5,
             Provider.GOOGLE.value: 3,
         }
+        # How many times a key is retried (same key, same model) before giving up
+        # and moving to the next key/provider. Useful for slow-but-reliable
+        # providers like NVIDIA which can time out on the first attempt.
+        settings = config.get("settings", {}) or {}
+        retry_cfg = settings.get("retry_attempts", {}) or {}
+        self.retry_attempts = {
+            Provider.NVIDIA.value: int(retry_cfg.get(Provider.NVIDIA.value, 3)),
+            Provider.OLLAMA_CLOUD.value: int(retry_cfg.get(Provider.OLLAMA_CLOUD.value, 2)),
+            Provider.OPENROUTER.value: int(retry_cfg.get(Provider.OPENROUTER.value, 1)),
+            Provider.GOOGLE.value: int(retry_cfg.get(Provider.GOOGLE.value, 1)),
+        }
+        self.retry_delay = float(settings.get("retry_delay", 2.0))
         self.rpm_limits = {Provider.NVIDIA.value: RateLimits.RPM.get(Provider.NVIDIA.value)}
         self.daily_limits = {
             "gemma-3-27b-it": 14000,
@@ -223,6 +236,10 @@ class KeyManager:
                     return key
         return None
 
+    def retry_attempts_for(self, provider: str) -> int:
+        """Number of attempts allowed for the same key before moving to the next key/provider."""
+        return max(1, int(self.retry_attempts.get(provider, 1)))
+
     def mark_result(
         self,
         provider: str,
@@ -274,3 +291,27 @@ class KeyManager:
                 )
             result[provider] = {"provider": provider, "keys": key_rows}
         return result
+
+    async def load_health_from_db(self) -> None:
+        """Load key health state from database."""
+        if self._db is None:
+            return
+        try:
+            health_data = await self._db.get_all_key_health()
+            for key_id, health in health_data.items():
+                if health.get("cooldown_until"):
+                    try:
+                        self.exhausted_until[key_id] = datetime.fromisoformat(health["cooldown_until"])
+                    except (ValueError, TypeError):
+                        pass
+                if health.get("blocked_reason"):
+                    self.blocked_keys.add(key_id)
+                    self._blocked_reasons[key_id] = health["blocked_reason"]
+                self._failure_counts[key_id] = health.get("failure_count", 0)
+                if health.get("last_success_at"):
+                    try:
+                        self._last_success_at[key_id] = datetime.fromisoformat(health["last_success_at"])
+                    except (ValueError, TypeError):
+                        pass
+        except Exception:
+            pass

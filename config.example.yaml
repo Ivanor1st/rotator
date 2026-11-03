@@ -52,6 +52,14 @@ settings:
   invalid_token_block_seconds: 120
   notify_on_rotation: true
   dashboard_language: fr
+  # Retry the same key (same provider/model) on transient errors before rotating
+  # to the next key/provider. Useful for slow-but-unlimited providers (NVIDIA).
+  retry_attempts:
+    nvidia: 3
+    ollama_cloud: 2
+    openrouter: 1
+    google: 1
+  retry_delay: 2.0
   backups:
     auto_backup_on_shutdown: true
     auto_restore_latest_on_startup: true

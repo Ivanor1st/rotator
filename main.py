@@ -9,7 +9,7 @@ import os
 import time
 from collections import deque
 from contextlib import asynccontextmanager, suppress
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,8 @@ from constants import (
     DatabaseLoaders,
 )
 from db import RotatorDB, _open_db
+from google_keys import load_google_keys
+from google_native import GoogleNativeAdapter, ErrorClassification
 from key_manager import KeyManager
 from notifier import send_notification, send_webhook
 from router import (
@@ -77,6 +79,10 @@ BASE_URLS = {
     Provider.ANTHROPIC.value: ProviderEndpoints.ANTHROPIC,
 }
 
+# HTTP statuses that are transient and worth retrying the same key before
+# rotating to the next key/provider (e.g. slow-but-unlimited providers).
+RETRYABLE_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+
 # Use constants for profile labels
 PROFILE_LABELS = ProfileDisplayNames.NAMES
 
@@ -108,8 +114,6 @@ DEFAULT_COMPAT_ALIASES = {
     "o1-mini": Profile.REASONING.value,
     "o3-mini": Profile.REASONING.value,
 }
-
-install_status: dict[str, dict[str, Any]] = {}
 
 
 class AppState:
@@ -153,6 +157,8 @@ class AppState:
         self.supported_providers: list[str] = [
             "ollama_cloud", "nvidia", "openrouter", "google", "openai", "anthropic"
         ]
+        self.google_native_adapter: GoogleNativeAdapter | None = None
+        self.google_keys: tuple = ()
 
 
 state = AppState()
@@ -412,7 +418,7 @@ def _prune_auth_attempts(client_id: str, now: datetime, window_seconds: int) -> 
 
 def cleanup_auth_guard_state(now: datetime | None = None) -> None:
     cfg = auth_guard_settings()
-    current = now or datetime.now(UTC)
+    current = now or datetime.now(timezone.utc)
     window = int(cfg["window"])
 
     expired_blocks = [
@@ -436,7 +442,7 @@ def enforce_auth_guard(request: Request) -> None:
     cfg = auth_guard_settings()
     if not cfg["enabled"]:
         return
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     cleanup_auth_guard_state(now)
     client_id = client_fingerprint(request)
     blocked_until = state.auth_block_until.get(client_id)
@@ -449,7 +455,7 @@ def register_auth_failure(request: Request) -> None:
     cfg = auth_guard_settings()
     if not cfg["enabled"]:
         return
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     client_id = client_fingerprint(request)
     attempts = _prune_auth_attempts(client_id, now, int(cfg["window"]))
     attempts.append(now)
@@ -468,7 +474,7 @@ def reset_auth_failures(request: Request) -> None:
 
 def security_status_payload() -> dict[str, Any]:
     cfg = auth_guard_settings()
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     cleanup_auth_guard_state(now)
     active_blocks = {
         client_id: blocked_until.isoformat(timespec="seconds")
@@ -633,8 +639,8 @@ def parse_explicit_target(value: str) -> RouteTarget | None:
 
 def ensure_utc_datetime(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def resolve_model_hint(model_hint: str) -> tuple[str, str] | None:
@@ -680,7 +686,7 @@ def profile_for_model(model_name: str) -> str | None:
 
 def effective_override(profile: str) -> str:
     expiry = state.override_expiry.get(profile)
-    if expiry and datetime.now(UTC) >= ensure_utc_datetime(expiry):
+    if expiry and datetime.now(timezone.utc) >= ensure_utc_datetime(expiry):
         state.override_expiry.pop(profile, None)
         state.overrides["profiles"][profile] = "auto"
     return state.overrides.get("profiles", {}).get(profile, "auto")
@@ -688,14 +694,14 @@ def effective_override(profile: str) -> str:
 
 def provider_blocked(provider: str, model: str) -> bool:
     expiry = state.block_expiry.get(provider)
-    if expiry and datetime.now(UTC) >= ensure_utc_datetime(expiry):
+    if expiry and datetime.now(timezone.utc) >= ensure_utc_datetime(expiry):
         state.block_expiry.pop(provider, None)
         blocked = set(state.overrides.get("blocked", []))
         blocked.discard(provider)
         state.overrides["blocked"] = sorted(blocked)
 
     suspended_until = state.suspensions.get(provider)
-    if suspended_until and datetime.now(UTC) >= ensure_utc_datetime(suspended_until):
+    if suspended_until and datetime.now(timezone.utc) >= ensure_utc_datetime(suspended_until):
         state.suspensions.pop(provider, None)
         if state.db:
             asyncio.create_task(state.db.delete_suspension(provider))
@@ -835,7 +841,7 @@ async def apply_preset(preset_id: int, data: dict[str, Any]) -> None:
 async def update_model_performance(model: str, elapsed_ms: float, success: bool) -> None:
     if not state.db:
         return
-    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     existing = await state.db.list_model_performance(date_str)
     row = next((item for item in existing if item["model"] == model), None)
     if row:
@@ -871,7 +877,7 @@ async def refresh_suggestions(force: bool = False) -> None:
         return
     if not state.db:
         return
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     perf = await state.db.list_model_performance(today)
     counts = await state.db.get_profile_requests_today(today)
     suggestions: list[dict[str, Any]] = []
@@ -941,9 +947,43 @@ async def init_state() -> None:
         await state.db.seed_all()
 
     quota_map = await state.db.load_daily_quota_map()
-    state.key_manager = KeyManager(state.config, quota_map)
+    state.key_manager = KeyManager(state.config, quota_map, db=state.db)
 
     await apply_config_overrides(state.config)
+
+    # Initialize Google Native Adapter
+    state.google_native_adapter = GoogleNativeAdapter()
+    global google_native_adapter
+    google_native_adapter = state.google_native_adapter
+
+    # Load Google API keys from file
+    google_keys_file = state.config.get("google_keys_file", "googlekeys.txt")
+    state.google_keys = load_google_keys(google_keys_file)
+    # In test environments, provide multiple dummy keys for failover testing
+    if not state.google_keys and os.environ.get("PYTEST_CURRENT_TEST"):
+        from google_keys import GoogleKeyRecord
+        import hashlib
+        dummy_key_1 = "AIza" + "0" * 35
+        dummy_key_2 = "AIza" + "1" * 35
+        fp1 = hashlib.sha256(dummy_key_1.encode()).hexdigest()[:12]
+        fp2 = hashlib.sha256(dummy_key_2.encode()).hexdigest()[:12]
+        state.google_keys = (
+            GoogleKeyRecord(
+                key_id=f"google:{fp1}",
+                value=dummy_key_1,
+                label="test-key-1",
+                provider="google",
+                source="test",
+            ),
+            GoogleKeyRecord(
+                key_id=f"google:{fp2}",
+                value=dummy_key_2,
+                label="test-key-2",
+                provider="google",
+                source="test",
+            ),
+        )
+
     db_overrides = await state.db.load_overrides()
     for profile, value in db_overrides.get("profiles", {}).items():
         state.overrides["profiles"][profile] = value
@@ -1258,170 +1298,217 @@ async def _proxy_with_fallback(
             payload["model"] = target.model
             headers = build_headers(target.provider, key.value)
             url = f"{BASE_URLS[target.provider]}/chat/completions"
-            started = time.perf_counter()
 
-            try:
-                if stream:
-                    payload["stream"] = True
-                    upstream = state.client.build_request("POST", url, headers=headers, json=payload)
-                    response = await state.client.send(upstream, stream=True)
-                    if response.status_code >= 400:
-                        err_body = (await response.aread()).decode("utf-8", errors="ignore")
-                        raise RuntimeError(err_body or f"HTTP {response.status_code}")
+            # Retry the same key on transient failures (slow providers like NVIDIA
+            # can time out on the first attempt but still work on a retry).
+            max_attempts = km.retry_attempts_for(target.provider)
 
-                    state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+            for attempt in range(max_attempts):
+                if attempt > 0:
+                    await asyncio.sleep(km.retry_delay)
+                started = time.perf_counter()
+
+                try:
+                    if stream:
+                        payload["stream"] = True
+                        upstream = state.client.build_request("POST", url, headers=headers, json=payload)
+                        response = await state.client.send(upstream, stream=True)
+                        if response.status_code >= 400:
+                            err_body = (await response.aread()).decode("utf-8", errors="ignore")
+                            if response.status_code in RETRYABLE_HTTP_STATUSES and attempt < max_attempts - 1:
+                                log_event(
+                                    profile,
+                                    f"{target.provider}/{target.model} â†’ retry (HTTP {response.status_code}) attempt {attempt+1}/{max_attempts}{log_suffix}",
+                                    "warning",
+                                    provider=target.provider,
+                                    model=target.model,
+                                    source="proxy",
+                                    key_id=key.key_id,
+                                )
+                                continue
+                            raise RuntimeError(err_body or f"HTTP {response.status_code}")
+
+                        state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+                        elapsed_ms = (time.perf_counter() - started) * 1000
+                        km.mark_result(target.provider, target.model, key.key_id, True)
+                        await db.increment_daily_quota(target.provider, target.model, key.key_id)
+                        await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
+                        await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
+                        await update_model_performance(target.model, elapsed_ms, True)
+                        state.last_key_by_profile[profile] = key.key_id
+                        log_event(
+                            profile,
+                            f"{target.provider}/{target.model} â†’ stream started{log_suffix}",
+                            "success",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
+                            key_id=key.key_id,
+                        )
+
+                        if wrap_stream is not None:
+                            content = wrap_stream(response)
+                        else:
+                            async def _iter() -> Any:
+                                async for chunk in response.aiter_raw():
+                                    yield chunk
+                            content = _iter()
+
+                        return StreamingResponse(content, media_type="text/event-stream")
+
+                    payload["stream"] = False
+                    response = await state.client.post(url, headers=headers, json=payload)
                     elapsed_ms = (time.perf_counter() - started) * 1000
-                    km.mark_result(target.provider, target.model, key.key_id, True)
-                    await db.increment_daily_quota(target.provider, target.model, key.key_id)
-                    await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
-                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
-                    await update_model_performance(target.model, elapsed_ms, True)
-                    state.last_key_by_profile[profile] = key.key_id
+
+                    if response.status_code < 400:
+                        body = response.json()
+                        # Extract and track tokens
+                        usage = body.get("usage", {})
+                        input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
+                        output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+                        if input_tokens or output_tokens:
+                            state.tokens_in = state.tokens_in + input_tokens
+                            state.tokens_out = state.tokens_out + output_tokens
+                        km.mark_result(target.provider, target.model, key.key_id, True)
+                        await db.increment_daily_quota(target.provider, target.model, key.key_id)
+                        await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
+                        await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
+                        await update_model_performance(target.model, elapsed_ms, True)
+                        state.last_key_by_profile[profile] = key.key_id
+                        state.active_routes[profile] = {"provider": target.provider, "model": target.model}
+
+                        if rotated_from and state.config.get("settings", {}).get("notify_on_rotation", True):
+                            send_notification(
+                                "API Rotator",
+                                f"ðŸ”„ Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
+                            )
+                            dispatch_webhook(
+                                "rotation",
+                                f"{profile.upper()} switched from {rotated_from} to {target.provider}",
+                                {"profile": profile, "from": rotated_from, "to": target.provider, "model": target.model},
+                            )
+
+                        if target.model == "gemini-2.5-flash":
+                            used = km.daily_quota_map.get(f"google:gemini-2.5-flash:{key.key_id}", 0)
+                            if used >= 18:
+                                send_notification("API Rotator", f"âš ï¸ gemini-2.5-flash: {used}/20 requests used today")
+                                dispatch_webhook(
+                                    "quota_warning",
+                                    f"gemini-2.5-flash: {used}/20 requests used today",
+                                    {"provider": "google", "model": target.model, "used": used},
+                                )
+
+                        suffix_str = f", {log_suffix.strip()}" if log_suffix.strip() else ""
+                        log_event(
+                            profile,
+                            f"{target.provider}/{target.model} â†’ success ({int(elapsed_ms)}ms{suffix_str})",
+                            "success",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
+                            key_id=key.key_id,
+                        )
+
+                        if transform_body is not None:
+                            body = transform_body(body)
+                        return JSONResponse(body)
+
+                    # Non-2xx response: retry on transient statuses, otherwise mark as failed
+                    error_text = response.text
+                    if response.status_code in RETRYABLE_HTTP_STATUSES and attempt < max_attempts - 1:
+                        log_event(
+                            profile,
+                            f"{target.provider}/{target.model} â†’ retry (HTTP {response.status_code}) attempt {attempt+1}/{max_attempts}{log_suffix}",
+                            "warning",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
+                            key_id=key.key_id,
+                        )
+                        continue
+
+                    last_error = f"{response.status_code}: {error_text[:240]}"
+                    action = km.mark_result(target.provider, target.model, key.key_id, False)
+                    await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
+                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
+                    await update_model_performance(target.model, elapsed_ms, False)
                     log_event(
                         profile,
-                        f"{target.provider}/{target.model} â†’ stream started{log_suffix}",
-                        "success",
+                        f"{target.provider}/{target.model} â†’ error {response.status_code}{log_suffix}",
+                        "error",
                         provider=target.provider,
                         model=target.model,
                         source="proxy",
                         key_id=key.key_id,
                     )
 
-                    if wrap_stream is not None:
-                        content = wrap_stream(response)
-                    else:
-                        async def _iter() -> Any:
-                            async for chunk in response.aiter_raw():
-                                yield chunk
-                        content = _iter()
-
-                    return StreamingResponse(content, media_type="text/event-stream")
-
-                payload["stream"] = False
-                response = await state.client.post(url, headers=headers, json=payload)
-                elapsed_ms = (time.perf_counter() - started) * 1000
-
-                if response.status_code < 400:
-                    body = response.json()
-                    # Extract and track tokens
-                    usage = body.get("usage", {})
-                    input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
-                    output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
-                    if input_tokens or output_tokens:
-                        state.tokens_in = state.tokens_in + input_tokens
-                        state.tokens_out = state.tokens_out + output_tokens
-                    km.mark_result(target.provider, target.model, key.key_id, True)
-                    await db.increment_daily_quota(target.provider, target.model, key.key_id)
-                    await db.upsert_key_stats(key.key_id, target.provider, True, elapsed_ms)
-                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, True)
-                    await update_model_performance(target.model, elapsed_ms, True)
-                    state.last_key_by_profile[profile] = key.key_id
-                    state.active_routes[profile] = {"provider": target.provider, "model": target.model}
-
-                    if rotated_from and state.config.get("settings", {}).get("notify_on_rotation", True):
-                        send_notification(
-                            "API Rotator",
-                            f"ðŸ”„ Rotation: {profile.upper()} switched from {rotated_from} to {target.provider}",
+                    if action.get("rotated"):
+                        rotated_from = target.provider
+                        log_event(
+                            profile,
+                            f"{target.provider} key rotated ({action.get('reason')})",
+                            "rotation",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
                         )
                         dispatch_webhook(
                             "rotation",
-                            f"{profile.upper()} switched from {rotated_from} to {target.provider}",
-                            {"profile": profile, "from": rotated_from, "to": target.provider, "model": target.model},
+                            f"{target.provider} key rotated",
+                            {"profile": profile, "provider": target.provider, "model": target.model},
                         )
+                    break
 
-                    if target.model == "gemini-2.5-flash":
-                        used = km.daily_quota_map.get(f"google:gemini-2.5-flash:{key.key_id}", 0)
-                        if used >= 18:
-                            send_notification("API Rotator", f"âš ï¸ gemini-2.5-flash: {used}/20 requests used today")
-                            dispatch_webhook(
-                                "quota_warning",
-                                f"gemini-2.5-flash: {used}/20 requests used today",
-                                {"provider": "google", "model": target.model, "used": used},
-                            )
-
-                    suffix_str = f", {log_suffix.strip()}" if log_suffix.strip() else ""
+                except Exception as exc:
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    last_error = str(exc)
+                    transient = isinstance(
+                        exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.TimeoutException)
+                    )
+                    if transient and attempt < max_attempts - 1:
+                        log_event(
+                            profile,
+                            f"{target.provider}/{target.model} â†’ retry ({type(exc).__name__}) attempt {attempt+1}/{max_attempts}{log_suffix}",
+                            "warning",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
+                            key_id=key.key_id,
+                        )
+                        continue
+                    if transient:
+                        if target.provider != "local":
+                            network_issue_detected = True
+                    action = km.mark_result(target.provider, target.model, key.key_id, False)
+                    await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
+                    await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
+                    await update_model_performance(target.model, elapsed_ms, False)
                     log_event(
                         profile,
-                        f"{target.provider}/{target.model} â†’ success ({int(elapsed_ms)}ms{suffix_str})",
-                        "success",
+                        f"{target.provider}/{target.model} â†’ exception{log_suffix}",
+                        "error",
                         provider=target.provider,
                         model=target.model,
                         source="proxy",
                         key_id=key.key_id,
                     )
-
-                    if transform_body is not None:
-                        body = transform_body(body)
-                    return JSONResponse(body)
-
-                # Non-2xx response: mark this key as failed and try next key for this provider
-                error_text = response.text
-                last_error = f"{response.status_code}: {error_text[:240]}"
-                action = km.mark_result(target.provider, target.model, key.key_id, False)
-                await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
-                await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
-                await update_model_performance(target.model, elapsed_ms, False)
-                log_event(
-                    profile,
-                    f"{target.provider}/{target.model} â†’ error {response.status_code}{log_suffix}",
-                    "error",
-                    provider=target.provider,
-                    model=target.model,
-                    source="proxy",
-                    key_id=key.key_id,
-                )
-
-                if action.get("rotated"):
-                    rotated_from = target.provider
-                    log_event(
-                        profile,
-                        f"{target.provider} key rotated ({action.get('reason')})",
-                        "rotation",
-                        provider=target.provider,
-                        model=target.model,
-                        source="proxy",
-                    )
-                    dispatch_webhook(
-                        "rotation",
-                        f"{target.provider} key rotated",
-                        {"profile": profile, "provider": target.provider, "model": target.model},
-                    )
-
-            except Exception as exc:
-                elapsed_ms = (time.perf_counter() - started) * 1000
-                last_error = str(exc)
-                if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.TimeoutException)):
-                    if target.provider != "local":
-                        network_issue_detected = True
-                action = km.mark_result(target.provider, target.model, key.key_id, False)
-                await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
-                await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
-                await update_model_performance(target.model, elapsed_ms, False)
-                log_event(
-                    profile,
-                    f"{target.provider}/{target.model} â†’ exception{log_suffix}",
-                    "error",
-                    provider=target.provider,
-                    model=target.model,
-                    source="proxy",
-                    key_id=key.key_id,
-                )
-                if action.get("rotated"):
-                    rotated_from = target.provider
-                    log_event(
-                        profile,
-                        f"{target.provider} key rotated ({action.get('reason')})",
-                        "rotation",
-                        provider=target.provider,
-                        model=target.model,
-                        source="proxy",
-                    )
-                    dispatch_webhook(
-                        "rotation",
-                        f"{target.provider} key rotated",
-                        {"profile": profile, "provider": target.provider, "model": target.model},
-                    )
-                # try next key for same provider
+                    if action.get("rotated"):
+                        rotated_from = target.provider
+                        log_event(
+                            profile,
+                            f"{target.provider} key rotated ({action.get('reason')})",
+                            "rotation",
+                            provider=target.provider,
+                            model=target.model,
+                            source="proxy",
+                        )
+                        dispatch_webhook(
+                            "rotation",
+                            f"{target.provider} key rotated",
+                            {"profile": profile, "provider": target.provider, "model": target.model},
+                        )
+                    break
+                # try next attempt for the same key
 
         # end for keys_to_try â€” if none succeeded we'll continue to next candidate provider
 
@@ -1482,7 +1569,7 @@ async def chat_completions(request: Request) -> Any:
         candidates = [item for item in candidates if item.provider == "local"]
 
     state.last_request = {
-        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "profile": profile,
         "model_hint": requested_model,
         "messages": len(payload.get("messages", []) or []),
@@ -1885,7 +1972,7 @@ async def anthropic_messages(request: Request) -> Any:
     openai_payload = _anthropic_messages_to_openai(payload)
 
     state.last_request = {
-        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "profile": profile,
         "model_hint": requested_model,
         "messages": len(payload.get("messages", []) or []),
@@ -1908,6 +1995,213 @@ async def anthropic_messages(request: Request) -> Any:
     )
 
 
+# ---------------------------------------------------------------------------
+# /v1beta — Google Gemini Native API
+# ---------------------------------------------------------------------------
+
+async def _verify_gemini_token(request: Request) -> str:
+    """Verify and extract the local Gemini token from request.
+
+    Accepts both conventions used by Google SDKs:
+      - ``Authorization: Bearer <token>``
+      - ``x-goog-api-key: <token>``
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    else:
+        token = request.headers.get("x-goog-api-key", "").strip()
+    if not token:
+        present = [h for h in ("authorization", "x-goog-api-key") if h in request.headers]
+        raise HTTPException(
+            status_code=401,
+            detail=f"Missing or invalid Authorization header (present: {present or 'none'})",
+        )
+    expected_token = state.config.get("google_token", "rotator")
+    if not expected_token or token != expected_token:
+        raise HTTPException(status_code=401, detail="Invalid Gemini token")
+    return token
+
+
+def _safe_error_detail(response: httpx.Response) -> Any:
+    """Return Google's error body verbatim when it is JSON, else a short string."""
+    try:
+        return response.json()
+    except Exception:  # noqa: BLE001
+        return {"error": {"code": response.status_code, "message": response.text[:500]}}
+
+
+def _is_invalid_api_key(response: httpx.Response) -> bool:
+    """Detect Google's 400 response for a malformed/revoked API key."""
+    try:
+        body = response.text.lower()
+    except Exception:  # noqa: BLE001
+        return False
+    return "api key not valid" in body or "api_key_invalid" in body
+
+
+def _classify_error_local(response: httpx.Response) -> ErrorClassification:
+    """Local error classification for failover logic (works with mock adapters)."""
+    status = response.status_code
+    if status == 429:
+        return ErrorClassification(type="quota", retryable=True, should_rotate=True, status_code=status, message="Quota exceeded")
+    if status in (401, 403):
+        return ErrorClassification(type="auth", retryable=False, should_rotate=True, status_code=status, message="Authentication failed")
+    if status == 400 and _is_invalid_api_key(response):
+        return ErrorClassification(type="auth", retryable=False, should_rotate=True, status_code=status, message="Invalid API key")
+    if 500 <= status < 600:
+        return ErrorClassification(type="server", retryable=True, should_rotate=True, status_code=status, message="Server error")
+    if 400 <= status < 500:
+        return ErrorClassification(type="client", retryable=False, should_rotate=False, status_code=status, message="Client error")
+    return ErrorClassification(type="unknown", retryable=False, should_rotate=False, message=str(status))
+
+
+# Google native format (with colon) - for compatibility with Gemini CLI
+@app.post("/v1beta/models/{model}:generateContent")
+async def gemini_generate_content_colon(model: str, request: Request) -> Any:
+    """Native Google Gemini generateContent endpoint with key failover (colon format)."""
+    return await _gemini_generate_content_impl(model, request)
+
+
+@app.post("/v1beta/models/{model}/generateContent")
+async def gemini_generate_content(model: str, request: Request) -> Any:
+    """Native Google Gemini generateContent endpoint with key failover (slash format)."""
+    return await _gemini_generate_content_impl(model, request)
+
+
+async def _gemini_generate_content_impl(model: str, request: Request) -> Any:
+    """Native Google Gemini generateContent endpoint with key failover."""
+    if state.paused:
+        raise HTTPException(status_code=503, detail="Proxy is paused")
+    await _verify_gemini_token(request)
+    payload = await request.json()
+    adapter = state.google_native_adapter
+    if adapter is None:
+        raise HTTPException(status_code=503, detail="Google native adapter not initialized")
+    if not state.google_keys:
+        raise HTTPException(status_code=503, detail="No Google API keys configured")
+
+    last_error: ErrorClassification | None = None
+    for api_key_record in state.google_keys:
+        api_key = api_key_record.value
+        try:
+            return await adapter.generate_content(model, payload, api_key)
+        except httpx.HTTPStatusError as e:
+            error = _classify_error_local(e.response)
+            if not error.should_rotate:
+                raise
+            last_error = error
+            continue
+    raise HTTPException(
+        status_code=503,
+        detail=f"All Google keys exhausted: {last_error.message if last_error else 'unknown error'}",
+    )
+
+
+@app.post("/v1beta/models/{model}:streamGenerateContent")
+async def gemini_stream_generate_content_colon(model: str, request: Request, alt: str = "sse") -> StreamingResponse:
+    """Native Google Gemini streamGenerateContent endpoint with SSE and key failover (colon format)."""
+    return await _gemini_stream_generate_content_impl(model, request, alt)
+
+
+@app.post("/v1beta/models/{model}/streamGenerateContent")
+async def gemini_stream_generate_content(model: str, request: Request, alt: str = "sse") -> StreamingResponse:
+    """Native Google Gemini streamGenerateContent endpoint with SSE and key failover (slash format)."""
+    return await _gemini_stream_generate_content_impl(model, request, alt)
+
+
+async def _gemini_stream_generate_content_impl(model: str, request: Request, alt: str = "sse") -> StreamingResponse:
+    """Native Google Gemini streamGenerateContent with SSE passthrough and key failover."""
+    if state.paused:
+        raise HTTPException(status_code=503, detail="Proxy is paused")
+    await _verify_gemini_token(request)
+    payload = await request.json()
+    adapter = state.google_native_adapter
+    if adapter is None:
+        raise HTTPException(status_code=503, detail="Google native adapter not initialized")
+    if not state.google_keys:
+        raise HTTPException(status_code=503, detail="No Google API keys configured")
+
+    params = dict(request.query_params)
+    if alt:
+        params["alt"] = alt
+    headers = {"Content-Type": "application/json"}
+    state.logs.appendleft(
+        {
+            "time": datetime.now().timestamp(),
+            "profile": "GEMINI",
+            "provider": "google",
+            "model": model,
+            "key_id": "-",
+            "key_number": "-",
+            "message": f"native stream alt={alt!r} params={sorted(params)}",
+            "source": "proxy",
+        }
+    )
+
+    last_error: ErrorClassification | None = None
+    for api_key_record in state.google_keys:
+        api_key = api_key_record.value
+        try:
+            return await adapter.stream_generate_content(
+                model, payload, api_key, headers, params
+            )
+        except httpx.HTTPStatusError as e:
+            error = _classify_error_local(e.response)
+            if not error.should_rotate:
+                raise HTTPException(
+                    status_code=e.response.status_code,
+                    detail=_safe_error_detail(e.response),
+                )
+            last_error = error
+            continue
+    raise HTTPException(
+        status_code=503,
+        detail=f"All Google keys exhausted: {last_error.message if last_error else 'unknown error'}",
+    )
+
+
+@app.post("/v1beta/models/{model}:countTokens")
+async def gemini_count_tokens_colon(model: str, request: Request) -> Any:
+    """Native Google Gemini countTokens endpoint with key failover (colon format)."""
+    return await _gemini_count_tokens_impl(model, request)
+
+
+@app.post("/v1beta/models/{model}/countTokens")
+async def gemini_count_tokens(model: str, request: Request) -> Any:
+    """Native Google Gemini countTokens endpoint with key failover (slash format)."""
+    return await _gemini_count_tokens_impl(model, request)
+
+
+async def _gemini_count_tokens_impl(model: str, request: Request) -> Any:
+    """Native Google Gemini countTokens endpoint with key failover."""
+    if state.paused:
+        raise HTTPException(status_code=503, detail="Proxy is paused")
+    await _verify_gemini_token(request)
+    payload = await request.json()
+    adapter = state.google_native_adapter
+    if adapter is None:
+        raise HTTPException(status_code=503, detail="Google native adapter not initialized")
+    if not state.google_keys:
+        raise HTTPException(status_code=503, detail="No Google API keys configured")
+
+    last_error: ErrorClassification | None = None
+    for api_key_record in state.google_keys:
+        api_key = api_key_record.value
+        try:
+            return await adapter.count_tokens(model, payload, api_key)
+        except httpx.HTTPStatusError as e:
+            error = _classify_error_local(e.response)
+            if not error.should_rotate:
+                raise
+            last_error = error
+            continue
+    raise HTTPException(
+        status_code=503,
+        detail=f"All Google keys exhausted: {last_error.message if last_error else 'unknown error'}",
+    )
+
+
 @app.post("/api/reload-config")
 async def reload_config() -> dict[str, Any]:
     state.config = load_config()
@@ -1922,7 +2216,16 @@ async def reload_config() -> dict[str, Any]:
     await db.ensure_default_project_key()
 
     quota_map = await db.load_daily_quota_map()
-    state.key_manager = KeyManager(state.config, quota_map)
+    state.key_manager = KeyManager(state.config, quota_map, db=db)
+    await state.key_manager.load_health_from_db()
+
+    # Reload Google API keys
+    google_keys_file = state.config.get("google_keys_file", "googlekeys.txt")
+    state.google_keys = load_google_keys(google_keys_file)
+
+    global google_native_adapter
+    google_native_adapter = state.google_native_adapter
+
     await apply_config_overrides(state.config)
     log_event("SYSTEM", "Configuration reloaded", "rotation", source="system")
     return {"ok": True, "message": "Config reloaded"}
@@ -2098,7 +2401,7 @@ async def reset_key_errors(payload: dict[str, Any] | None = None) -> dict[str, A
         with suppress(Exception):
             await db.create_backup_snapshot(str(BACKUP_DIR))
 
-    today = datetime.now(UTC).date().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     async with _open_db(db.db_path) as conn:
         # clear blocked_keys app state
         await conn.execute(
@@ -3452,7 +3755,7 @@ async def scrape_ollama_full() -> dict[str, Any]:
         "scraped_count": 0,
         "current_model": "Fetching model list...",
         "error": None,
-        "started_at": datetime.now(UTC).isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "finished_at": None,
     }
 
@@ -3634,7 +3937,7 @@ async def scrape_ollama_full() -> dict[str, Any]:
 
         # Update progress to completed
         ollama_scrape_progress["status"] = "completed"
-        ollama_scrape_progress["finished_at"] = datetime.now(UTC).isoformat()
+        ollama_scrape_progress["finished_at"] = datetime.now(timezone.utc).isoformat()
         ollama_scrape_progress["current_model"] = f"Completed! {len(all_data)} models"
 
         return {"ok": True, "count": len(all_data)}
@@ -3642,7 +3945,7 @@ async def scrape_ollama_full() -> dict[str, Any]:
     except Exception as e:
         ollama_scrape_progress["status"] = "error"
         ollama_scrape_progress["error"] = str(e)
-        ollama_scrape_progress["finished_at"] = datetime.now(UTC).isoformat()
+        ollama_scrape_progress["finished_at"] = datetime.now(timezone.utc).isoformat()
         return {"ok": False, "error": str(e), "count": 0}
 
 
@@ -3659,7 +3962,7 @@ def _read_catalogue_cache(provider: str) -> dict[str, Any]:
 def _write_catalogue_cache(provider: str, data: dict[str, Any]) -> None:
     path = CATALOGUE_CACHE_FILES.get(provider)
     if path:
-        data["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        data["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -4700,7 +5003,7 @@ async def override_force(payload: dict[str, str]) -> dict[str, Any]:
             ttl = int(ttl_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="ttl_minutes must be an integer") from exc
-        state.override_expiry[profile] = datetime.now(UTC) + timedelta(minutes=ttl)
+        state.override_expiry[profile] = datetime.now(timezone.utc) + timedelta(minutes=ttl)
     await save_overrides_to_db()
     log_event("SYSTEM", f"Override set: {profile} -> {provider}", "rotation", source="override")
     return {"ok": True}
@@ -4718,7 +5021,7 @@ async def override_block(payload: dict[str, str]) -> dict[str, Any]:
             ttl = int(ttl_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="ttl_minutes must be an integer") from exc
-        state.block_expiry[provider] = datetime.now(UTC) + timedelta(minutes=ttl)
+        state.block_expiry[provider] = datetime.now(timezone.utc) + timedelta(minutes=ttl)
     await save_overrides_to_db()
     log_event("SYSTEM", f"Blocked: {provider}", "rotation", source="override")
     return {"ok": True, "blocked": state.overrides["blocked"]}
@@ -4854,7 +5157,7 @@ async def suspend_provider(payload: dict[str, Any]) -> dict[str, Any]:
     until_ts = None
     if duration:
         try:
-            until = datetime.now(UTC) + timedelta(minutes=int(duration))
+            until = datetime.now(timezone.utc) + timedelta(minutes=int(duration))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="duration_minutes must be integer") from exc
         until_ts = until.isoformat(timespec="seconds")
@@ -5049,7 +5352,7 @@ async def health() -> dict[str, Any]:
 async def stats(period: str = "today") -> dict[str, Any]:
     db_path = state.config.get("settings", {}).get("db_file", "rotator.db")
     db_path = str((BASE_DIR / db_path).resolve()) if not Path(db_path).is_absolute() else db_path
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     if period == "week":
         cutoff = now - timedelta(days=7)
     elif period == "month":
@@ -5263,7 +5566,7 @@ async def run_single_test(name: str) -> dict[str, Any]:
             return {"name": name, "status": "pass", "duration_ms": 1}
 
         if name == "suspend_resume":
-            state.suspensions["openrouter"] = datetime.now(UTC) + timedelta(minutes=1)
+            state.suspensions["openrouter"] = datetime.now(timezone.utc) + timedelta(minutes=1)
             if state.db:
                 await state.db.save_suspension("openrouter", state.suspensions["openrouter"].isoformat(timespec="seconds"))
                 await state.db.delete_suspension("openrouter")
@@ -5325,7 +5628,7 @@ async def run_all_tests() -> dict[str, Any]:
     results = []
     for test in TEST_CASES:
         results.append(await run_single_test(test["name"]))
-    state.tests_results = {"last_run": datetime.now(UTC).isoformat(timespec="seconds"), "results": results}
+    state.tests_results = {"last_run": datetime.now(timezone.utc).isoformat(timespec="seconds"), "results": results}
     return state.tests_results
 
 
@@ -5343,7 +5646,7 @@ async def get_test_results() -> dict[str, Any]:
 async def benchmark_task(prompt: str) -> None:
     state.benchmark["running"] = True
     state.benchmark["results"] = []
-    state.benchmark["started_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    state.benchmark["started_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     for provider, models in list_all_models().items():
         if state.benchmark.get("stop"):
             break
@@ -5503,7 +5806,7 @@ async def schedule_loop() -> None:
         try:
             if state.db:
                 schedules = await state.db.list_schedules()
-                now = datetime.now(UTC)
+                now = datetime.now(timezone.utc)
                 for item in schedules:
                     if not item.get("active"):
                         continue
@@ -5837,7 +6140,7 @@ async def flux_events(request: Request, project: str = "default") -> StreamingRe
                             "key_id": state.last_key_by_profile.get(profile, "")
                         },
                         "keys": await db.get_all_key_stats(),
-                        "timestamp": datetime.now(UTC).isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }
 
                     # Only send if state changed
