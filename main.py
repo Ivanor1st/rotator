@@ -1350,7 +1350,13 @@ async def _proxy_with_fallback(
                             content = wrap_stream(response)
                         else:
                             async def _iter() -> Any:
-                                async for chunk in response.aiter_raw():
+                                # aiter_bytes() et non aiter_raw() : aiter_raw()
+                                # renvoie les octets BRUTS du fournisseur. Gemini
+                                # repond en gzip, et comme on ne renvoie pas
+                                # l'en-tete Content-Encoding, le client recevait
+                                # du gzip illisible (0 morceau SSE). aiter_bytes()
+                                # decompresse selon l'en-tete amont.
+                                async for chunk in response.aiter_bytes():
                                     yield chunk
                             content = _iter()
 
@@ -1795,7 +1801,8 @@ async def _anthropic_stream_adapter(response: Any, requested_model: str, msg_id:
     line_buf = ""  # SSE line buffer for partial data across raw chunks
 
     try:
-        async for raw_chunk in response.aiter_raw():
+        # aiter_bytes() : decompresse le gzip eventuel du fournisseur (voir _iter).
+        async for raw_chunk in response.aiter_bytes():
             text = raw_chunk.decode("utf-8", errors="ignore") if isinstance(raw_chunk, bytes) else raw_chunk
             line_buf += text
 
