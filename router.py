@@ -32,69 +32,55 @@ class RouteTarget:
 
 # Default routing chains (fallback when DB is not available)
 ROUTING_CHAINS: dict[str, list[RouteTarget]] = {
+    # Chaines verifiees le 2026-11-24 (lot 26) : chaque modele ci-dessous a repondu
+    # en direct, et pour coding / reasoning / long il a aussi passe un test JSON,
+    # code et appel d'outil. Ollama Cloud est retire : tous ses modeles sont soit
+    # retires (410), soit payants (402 « Add usage credits ») sur ces comptes.
+    # Le meme modele est garde chez deux fournisseurs (NVIDIA + OpenRouter) pour
+    # qu'une panne d'un cote ne bloque pas le profil.
     Profile.CODING.value: [
-        # Ollama Cloud - free tier
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:120b:cloud", "shared"),
-        # NVIDIA - free tier
-        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m3", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "z-ai/glm-5.2", "35/40 rpm"),
-        # OpenRouter - free models
-        RouteTarget(Provider.OPENROUTER.value, "cohere/north-mini-code:free", "free"),
-        RouteTarget(Provider.OPENROUTER.value, "openai/gpt-oss-20b:free", "free"),
-        # Google - free tier
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-ultra-550b-a55b", "35/40 rpm"),
+        RouteTarget(Provider.GOOGLE.value, "gemini-3-flash-preview", "free tier"),
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3.5-super-vl-120b-a12b", "35/40 rpm"),
+        RouteTarget(Provider.NVIDIA.value, "poolside/laguna-xs-2.1", "35/40 rpm"),
+        # Tres bon codeur mais lent (50-75 s par reponse) : en repli seulement.
+        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m3.1-flash", "35/40 rpm"),
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.REASONING.value: [
-        # Ollama Cloud - free tier
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "nemotron-3-super:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
-        # NVIDIA - free tier
-        RouteTarget(Provider.NVIDIA.value, "z-ai/glm-5.2", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v4-flash-0731", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "openai/gpt-oss-120b", "35/40 rpm"),
-        # OpenRouter - free models
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-ultra-550b-a55b", "35/40 rpm"),
+        RouteTarget(Provider.GOOGLE.value, "gemini-3-flash-preview", "free tier"),
         RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3.5-super-vl-120b-a12b", "35/40 rpm"),
         RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "free"),
-        # Google - free tier
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "35/40 rpm"),
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.CHAT.value: [
-        # Ollama Cloud - free tier
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "minimax-m3:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:20b:cloud", "shared"),
-        # NVIDIA - free tier
-        RouteTarget(Provider.NVIDIA.value, "minimaxai/minimax-m3", "35/40 rpm"),
-        # OpenRouter - free models
-        RouteTarget(Provider.OPENROUTER.value, "openai/gpt-oss-20b:free", "free"),
+        RouteTarget(Provider.GOOGLE.value, "gemini-flash-lite-latest", "free tier"),
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3.5-lightning-30b-a3b", "35/40 rpm"),
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3.5-lightning:free", "free"),
+        RouteTarget(Provider.OPENROUTER.value, "baidu/ernie-5.5-flash-preview:free", "free"),
         RouteTarget(Provider.OPENROUTER.value, "google/gemma-4-31b-it:free", "free"),
-        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
     Profile.LONG.value: [
-        # Ollama Cloud - free tier
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "nemotron-3-super:cloud", "shared"),
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gpt-oss:120b:cloud", "shared"),
-        # NVIDIA - free tier
-        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-nano-30b-a3b", "35/40 rpm"),
-        RouteTarget(Provider.NVIDIA.value, "deepseek-ai/deepseek-v4-flash-0731", "35/40 rpm"),
-        # OpenRouter - free models
+        # Contexte 1M pour les quatre premiers.
+        RouteTarget(Provider.GOOGLE.value, "gemini-3-flash-preview", "free tier"),
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3-ultra-550b-a55b", "35/40 rpm"),
         RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3-ultra-550b-a55b:free", "free"),
-        # Google - 1M context, free tier
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3.5-super-vl:free", "free"),
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
     Profile.VISION.value: [
-        # Ollama Cloud - free tier, Gemma 4 is multimodal
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
-        # NVIDIA - free tier
-        RouteTarget(Provider.NVIDIA.value, "meta/llama-3.2-11b-vision-instruct", "35/40 rpm"),
-        # OpenRouter - free vision model
-        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-nano-12b-v2-vl:free", "free"),
-        # Google - free tier, multimodal
+        # Teste en texte seulement le 2026-11-24 (pas avec une image).
+        RouteTarget(Provider.OPENROUTER.value, "nvidia/nemotron-3.5-super-vl:free", "free"),
+        RouteTarget(Provider.NVIDIA.value, "nvidia/nemotron-3.5-super-vl-120b-a12b", "35/40 rpm"),
+        RouteTarget(Provider.GOOGLE.value, "gemini-3-flash-preview", "free tier"),
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
         # LOCAL: dynamically resolved at runtime if model installed
     ],
@@ -103,13 +89,9 @@ ROUTING_CHAINS: dict[str, list[RouteTarget]] = {
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
     Profile.TRANSLATE.value: [
-        # Ollama Cloud - free tier, multilingual
-        RouteTarget(Provider.OLLAMA_CLOUD.value, "gemma4:31b:cloud", "shared"),
-        # NVIDIA - translate specialist, free tier
         RouteTarget(Provider.NVIDIA.value, "nvidia/riva-translate-4b-instruct-v2", "35/40 rpm"),
-        # OpenRouter - free model
+        RouteTarget(Provider.GOOGLE.value, "gemini-flash-lite-latest", "free tier"),
         RouteTarget(Provider.OPENROUTER.value, "google/gemma-4-31b-it:free", "free"),
-        # Google - free tier
         RouteTarget(Provider.GOOGLE.value, "gemini-2.5-flash", "18/20 day"),
     ],
 }
@@ -186,43 +168,55 @@ def invalidate_routing_cache() -> None:
     _routing_chains_cache = None
 
 MODEL_CATALOG: dict[str, list[dict[str, str]]] = {
+    # Verifie le 2026-11-24 (lot 26). Les modeles retires (410), introuvables
+    # (404) ou payants (402) ont ete enleves.
     Provider.OLLAMA_CLOUD.value: [
-        # Verified free-tier models only (checked 2026-08-15; rest require an Ollama subscription)
-        {"model": "minimax-m3:cloud", "context": "198K", "emoji": "☁️"},
-        {"model": "gemma4:31b:cloud", "context": "128K", "emoji": "☁️"},
-        {"model": "gpt-oss:120b:cloud", "context": "131K", "emoji": "☁️"},
-        {"model": "gpt-oss:20b:cloud", "context": "131K", "emoji": "☁️"},
-        {"model": "nemotron-3-super:cloud", "context": "256K", "emoji": "☁️"},
-        {"model": "nemotron-3-nano:30b:cloud", "context": "256K", "emoji": "☁️"},
+        # Vide : sur ces comptes, tous les modeles Ollama Cloud repondent 410
+        # (retire) ou 402 (« Add usage credits »). A re-tester si des credits
+        # sont ajoutes.
     ],
     Provider.NVIDIA.value: [
-        # Verified working models only (checked 2026-08-15)
-        {"model": "openai/gpt-oss-120b", "context": "131K", "emoji": "💻🧠💬"},
-        {"model": "minimaxai/minimax-m3", "context": "200K", "emoji": "💬📄"},
-        {"model": "z-ai/glm-5.2", "context": "128K", "emoji": "💻🧠"},
-        {"model": "deepseek-ai/deepseek-v4-flash-0731", "context": "128K", "emoji": "💻🧠"},
-        {"model": "nvidia/nemotron-3-nano-30b-a3b", "context": "256K", "emoji": "📄"},
-        {"model": "meta/llama-3.2-11b-vision-instruct", "context": "128K", "emoji": "👁️"},
+        {"model": "nvidia/nemotron-3-ultra-550b-a55b", "context": "1M", "emoji": "💻🧠📄"},
+        {"model": "nvidia/nemotron-3.5-super-vl-120b-a12b", "context": "1M", "emoji": "💻🧠👁️"},
+        {"model": "nvidia/nemotron-3.5-lightning-30b-a3b", "context": "1M", "emoji": "💬"},
+        {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "context": "256K", "emoji": "🧠"},
+        {"model": "minimaxai/minimax-m3.1-flash", "context": "200K", "emoji": "💻"},
+        {"model": "poolside/laguna-xs-2.1", "context": "128K", "emoji": "💻"},
+        {"model": "mistralai/mistral-large-4-1t-a52b", "context": "128K", "emoji": "💬"},
         {"model": "nvidia/riva-translate-4b-instruct-v2", "context": "4K", "emoji": "🌍"},
     ],
     Provider.OPENROUTER.value: [
-        # Verified free (":free" suffix, $0 pricing, checked 2026-08-15)
-        {"model": "openai/gpt-oss-20b:free", "context": "131K", "emoji": "💻🧠💬"},
-        {"model": "cohere/north-mini-code:free", "context": "32K", "emoji": "💻"},
-        {"model": "google/gemma-4-31b-it:free", "context": "128K", "emoji": "💬🌍"},
-        {"model": "nvidia/nemotron-3-ultra-550b-a55b:free", "context": "128K", "emoji": "🧠"},
-        {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "context": "128K", "emoji": "🧠"},
-        {"model": "nvidia/nemotron-nano-12b-v2-vl:free", "context": "128K", "emoji": "👁️"},
+        # Verified free (":free" suffix, $0 pricing)
+        {"model": "nvidia/nemotron-3-ultra-550b-a55b:free", "context": "1M", "emoji": "💻🧠📄"},
+        {"model": "nvidia/nemotron-3.5-super-vl:free", "context": "1M", "emoji": "🧠👁️📄"},
+        {"model": "nvidia/nemotron-3.5-lightning:free", "context": "1M", "emoji": "💬"},
+        {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "context": "256K", "emoji": "🧠"},
+        {"model": "inclusionai/ling-3.2-flash:free", "context": "1M", "emoji": "📄"},
+        {"model": "particle-ai/particle-1:free", "context": "1M", "emoji": "💻"},
+        {"model": "baidu/ernie-5.5-flash-preview:free", "context": "1M", "emoji": "💬"},
+        {"model": "recursive/flint-v1.0:free", "context": "256K", "emoji": "💻"},
+        {"model": "dots-studio/dots-3-note-preview:free", "context": "512K", "emoji": "💬"},
+        {"model": "google/gemma-4-31b-it:free", "context": "256K", "emoji": "💬🌍"},
+        # Routeur OpenRouter : choisit lui-meme un modele gratuit (etait range a
+        # tort sous NVIDIA, d'ou un 404).
+        {"model": "openrouter/free", "context": "200K", "emoji": "🎲"},
     ],
     Provider.GOOGLE.value: [
+        {"model": "gemini-3-flash-preview", "context": "1M", "emoji": "🟡"},
+        {"model": "gemini-flash-lite-latest", "context": "1M", "emoji": "🟡"},
+        {"model": "gemini-3.5-flash", "context": "1M", "emoji": "🟡"},
         {"model": "gemini-2.5-flash", "context": "1M", "emoji": "🟡"},
+        {"model": "gemma-4-31b-it", "context": "128K", "emoji": "🟡"},
     ],
     Provider.LOCAL.value: [
+        # Non teste le 2026-11-24 : Ollama local n'etait pas lance.
         {"model": "qwen3-coder-next:latest", "context": "?", "emoji": "🏠"},
         {"model": "glm-ocr", "context": "?", "emoji": "🏠"},
         {"model": "lfm2.5-thinking:1.2b", "context": "?", "emoji": "🏠"},
-        {"model": "translategemma:27b", "context": "?", "emoji": ""},
+        {"model": "translategemma:27b", "context": "?", "emoji": "🏠"},
     ],
+    # OpenAI / Anthropic : aucune cle configuree, donc non testables ; gardes
+    # pour les alias de compatibilite (claude-*, gpt-*).
     Provider.OPENAI.value: [
         {"model": "gpt-4o", "context": "128K", "emoji": "🟢"},
         {"model": "gpt-4o-mini", "context": "128K", "emoji": "🟢"},

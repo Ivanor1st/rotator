@@ -83,6 +83,27 @@ BASE_URLS = {
 # rotating to the next key/provider (e.g. slow-but-unlimited providers).
 RETRYABLE_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
 
+# Erreurs propres au MODELE, pas a la cle : modele inconnu (404) ou retire (410),
+# abonnement requis (402, Ollama Cloud), requete refusee par ce modele
+# (400 / 422). Avant, elles comptaient contre la CLE : apres 3 modeles morts,
+# la cle etait mise en pause pour TOUS les modeles. Desormais la cle est
+# epargnee et on passe directement au candidat suivant (inutile d'essayer les
+# 14 autres cles du meme compte pour un modele qui n'existe pas).
+MODEL_LEVEL_HTTP_STATUSES = {400, 402, 404, 410, 422}
+
+# Modele surcharge chez le fournisseur (Google 503 « The model is overloaded »).
+# Apres les nouvelles tentatives sur la meme cle, on passe au candidat suivant
+# au lieu d'essayer les 8 cles du meme fournisseur (~27 s perdues mesurees).
+OVERLOADED_HTTP_STATUSES = {503, 529}
+
+
+def skips_target(status_code: int, attempt: int, max_attempts: int) -> bool:
+    """True si l'erreur concerne le modele (pas la cle) : on epargne la cle et on
+    passe au candidat suivant."""
+    if status_code in MODEL_LEVEL_HTTP_STATUSES:
+        return True
+    return status_code in OVERLOADED_HTTP_STATUSES and attempt >= max_attempts - 1
+
 # Use constants for profile labels
 PROFILE_LABELS = ProfileDisplayNames.NAMES
 
@@ -745,13 +766,13 @@ def default_presets() -> list[dict[str, Any]]:
     return [
         {
             "name": "ðŸš€ Maximum Power",
-            "description": "MiniMax M2.5 then GLM-5 then NVIDIA",
+            "description": "Nemotron 3 Ultra then Gemini 3 Flash then the profile chain",
             "data": {
                 "profiles": {
                     profile: {
                         "models": [
-                            "minimax-m2.5:cloud",
-                            "glm-5:cloud",
+                            "nvidia/nemotron-3-ultra-550b-a55b",
+                            "gemini-3-flash-preview",
                         ] + base_models[profile],
                         "lock_top": False,
                     }
@@ -763,13 +784,13 @@ def default_presets() -> list[dict[str, Any]]:
         },
         {
             "name": "ðŸ’° Economy Mode",
-            "description": "OpenRouter free then Gemma",
+            "description": "OpenRouter free router then Gemini Flash Lite",
             "data": {
                 "profiles": {
                     profile: {
                         "models": [
                             "openrouter/free",
-                            "gemma-3-27b-it",
+                            "gemini-flash-lite-latest",
                         ],
                         "lock_top": False,
                     }
@@ -781,11 +802,11 @@ def default_presets() -> list[dict[str, Any]]:
         },
         {
             "name": "âš¡ Speed Mode",
-            "description": "Step 3.5 Flash then Gemma 27B",
+            "description": "Nemotron 3.5 Lightning then Gemini Flash Lite",
             "data": {
                 "profiles": {
                     profile: {
-                        "models": ["stepfun/step-3.5-flash:free", "gemma-3-27b-it"],
+                        "models": ["nvidia/nemotron-3.5-lightning-30b-a3b", "gemini-flash-lite-latest"],
                         "lock_top": False,
                     }
                     for profile in PROFILES
@@ -811,10 +832,10 @@ def default_presets() -> list[dict[str, Any]]:
         },
         {
             "name": "ðŸ’» Intensive Coding",
-            "description": "Coding locked to MiniMax M2.5",
+            "description": "Coding locked to Nemotron 3 Ultra",
             "data": {
                 "profiles": {
-                    "coding": {"models": ["minimax-m2.5:cloud"], "lock_top": True},
+                    "coding": {"models": ["nvidia/nemotron-3-ultra-550b-a55b"], "lock_top": True},
                     **{
                         profile: {"models": base_models[profile], "lock_top": False}
                         for profile in PROFILES
@@ -1020,8 +1041,11 @@ def _get_ollama_local_models() -> list[str]:
     """Get list of locally installed Ollama models. Returns empty list if Ollama not available."""
     import httpx
     try:
-        with httpx.Client(timeout=3.0) as client:
-            resp = client.get("http://localhost:11434/api/tags")
+        # 127.0.0.1 et non localhost : sous Windows, localhost essaie d'abord
+        # IPv6 puis IPv4, et une connexion refusee coute ~2,4 s par adresse
+        # (4,8 s mesurees quand Ollama est eteint).
+        with httpx.Client(timeout=1.5) as client:
+            resp = client.get("http://127.0.0.1:11434/api/tags")
             if resp.status_code == 200:
                 data = resp.json()
                 models = data.get("models", [])
@@ -1030,8 +1054,23 @@ def _get_ollama_local_models() -> list[str]:
         pass
     return []
 
-# Cache for local models (refreshed each request in choose_targets)
+# Cache des modeles locaux. Avant, _get_ollama_local_models() etait appele a
+# CHAQUE requete, de facon synchrone dans un handler async : avec Ollama
+# eteint, chaque requete perdait ~5 s et bloquait toute la boucle d'evenements
+# (les autres requetes en cours attendaient aussi).
 _local_models_cache: list[str] | None = None
+_local_models_checked_at: float = 0.0
+LOCAL_MODELS_TTL_SECONDS = 60.0
+
+
+def _get_ollama_local_models_cached() -> list[str]:
+    global _local_models_cache, _local_models_checked_at
+    now = time.monotonic()
+    if _local_models_cache is not None and now - _local_models_checked_at < LOCAL_MODELS_TTL_SECONDS:
+        return _local_models_cache
+    _local_models_cache = _get_ollama_local_models()
+    _local_models_checked_at = now
+    return _local_models_cache
 
 def choose_targets(profile: str) -> list[Any]:
     global _local_models_cache
@@ -1067,13 +1106,17 @@ def choose_targets(profile: str) -> list[Any]:
     filtered = [item for item in candidates if not provider_blocked(item.provider, item.model)]
 
     # Dynamically resolve LOCAL provider models from Ollama
-    local_models = _get_ollama_local_models()
+    # Ne sonder Ollama local que si la chaine contient vraiment un modele local.
+    needs_local = any(item.provider == "local" for item in filtered)
+    local_models = _get_ollama_local_models_cached() if needs_local else []
     resolved_targets = []
     for item in filtered:
         if item.provider == "local":
             # For LOCAL provider, use the first available local model
             if local_models:
-                resolved_targets.append(RouteTarget(item.provider, local_models[0], item.limit))
+                # quota_hint et non .limit : RouteTarget n'a pas d'attribut limit,
+                # donc des qu'Ollama local tournait, la requete plantait.
+                resolved_targets.append(RouteTarget(item.provider, local_models[0], item.quota_hint))
             # If no local models available, skip this target
         else:
             resolved_targets.append(item)
@@ -1214,6 +1257,28 @@ async def list_models(request: Request) -> dict[str, Any]:
     }
 
 
+def elapsed_ms_since(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
+
+
+async def _record_model_level_failure(
+    profile: str, target: Any, key_id: str, status_code: int, elapsed_ms: float, log_suffix: str
+) -> None:
+    """Trace l'echec d'un MODELE (voir MODEL_LEVEL_HTTP_STATUSES) sans penaliser la cle."""
+    if state.db is not None:
+        await state.db.add_profile_history(profile, target.provider, target.model, key_id, False)
+    await update_model_performance(target.model, elapsed_ms, False)
+    log_event(
+        profile,
+        f"{target.provider}/{target.model} -> model unavailable (HTTP {status_code}), key spared{log_suffix}",
+        "error",
+        provider=target.provider,
+        model=target.model,
+        source="proxy",
+        key_id=key_id,
+    )
+
+
 async def _proxy_with_fallback(
     *,
     profile: str,
@@ -1278,7 +1343,11 @@ async def _proxy_with_fallback(
         # Try all eligible keys for this provider/model before moving to next provider
         keys_to_try = km.choose_keys_for_target(target)
         if not keys_to_try:
+            if last_error is None:
+                # Sans ce message, l'erreur finale affichait "Last error: None".
+                last_error = f"{target.provider}/{target.model}: no eligible key (all keys blocked or cooling down)"
             continue
+        model_unavailable = False
 
         # Prefer the last successful key for this profile if it's still below rotation threshold
         last_key_id = state.last_key_by_profile.get(profile)
@@ -1315,6 +1384,11 @@ async def _proxy_with_fallback(
                         response = await state.client.send(upstream, stream=True)
                         if response.status_code >= 400:
                             err_body = (await response.aread()).decode("utf-8", errors="ignore")
+                            if skips_target(response.status_code, attempt, max_attempts):
+                                last_error = f"{response.status_code}: {err_body[:240]}"
+                                model_unavailable = True
+                                await _record_model_level_failure(profile, target, key.key_id, response.status_code, elapsed_ms_since(started), log_suffix)
+                                break
                             if response.status_code in RETRYABLE_HTTP_STATUSES and attempt < max_attempts - 1:
                                 log_event(
                                     profile,
@@ -1434,6 +1508,10 @@ async def _proxy_with_fallback(
                         continue
 
                     last_error = f"{response.status_code}: {error_text[:240]}"
+                    if skips_target(response.status_code, attempt, max_attempts):
+                        model_unavailable = True
+                        await _record_model_level_failure(profile, target, key.key_id, response.status_code, elapsed_ms, log_suffix)
+                        break
                     action = km.mark_result(target.provider, target.model, key.key_id, False)
                     await db.upsert_key_stats(key.key_id, target.provider, False, elapsed_ms)
                     await db.add_profile_history(profile, target.provider, target.model, key.key_id, False)
@@ -1482,7 +1560,10 @@ async def _proxy_with_fallback(
                             key_id=key.key_id,
                         )
                         continue
-                    if transient:
+                    # Seul un echec de CONNEXION signale un reseau coupe. Un delai
+                    # depasse (ReadTimeout) veut dire « fournisseur lent » : avant,
+                    # il faisait sauter tous les autres fournisseurs cloud.
+                    if isinstance(exc, httpx.ConnectError):
                         if target.provider != "local":
                             network_issue_detected = True
                     action = km.mark_result(target.provider, target.model, key.key_id, False)
@@ -1515,6 +1596,11 @@ async def _proxy_with_fallback(
                         )
                     break
                 # try next attempt for the same key
+
+            if model_unavailable:
+                # Modele indisponible pour ce fournisseur : inutile d'essayer
+                # les autres cles, on passe au candidat suivant.
+                break
 
         # end for keys_to_try â€” if none succeeded we'll continue to next candidate provider
 
